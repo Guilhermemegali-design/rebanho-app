@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL, calcularGmd } from "@/lib/format";
-import { useRfidScanner } from "@/lib/rfid";
+import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { Search, Tag as TagIcon, Radio, Scale, ArrowLeftRight, Syringe, PlusCircle } from "lucide-react";
 import { ListHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, Tag, SectionTitle } from "@/components/UI";
 
@@ -13,12 +13,35 @@ export default function AnimaisTab({ dados }) {
   const [busca, setBusca] = useState("");
   const [modo, setModo] = useState("lista"); // lista | novo | detalhe
   const [animalSelecionado, setAnimalSelecionado] = useState(null);
+  const [avisoScan, setAvisoScan] = useState("");
 
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     if (!termo) return dados.animais;
-    return dados.animais.filter((a) => a.brinco_atual.toLowerCase().includes(termo) || (a.raca || "").toLowerCase().includes(termo));
+    return dados.animais.filter(
+      (a) =>
+        a.brinco_atual.toLowerCase().includes(termo) ||
+        (a.brinco_rfid || "").toLowerCase().includes(termo) ||
+        (a.raca || "").toLowerCase().includes(termo)
+    );
   }, [dados.animais, busca]);
+
+  // Aponta o bastão em qualquer lugar da lista pra pular direto pra
+  // ficha do animal — funciona tanto pelo brinco visual quanto pelo RFID.
+  const aoLerTagLista = useCallback(
+    (tag) => {
+      const animal = encontrarAnimalPorTag(dados.animais, tag);
+      if (animal) {
+        setAvisoScan("");
+        setAnimalSelecionado(animal);
+        setModo("detalhe");
+      } else {
+        setAvisoScan(`Nenhum animal encontrado com "${tag}". Toque em "Novo" para cadastrar.`);
+      }
+    },
+    [dados.animais]
+  );
+  useRfidScanner(aoLerTagLista, { ativo: modo === "lista" });
 
   if (modo === "novo") {
     return (
@@ -49,8 +72,11 @@ export default function AnimaisTab({ dados }) {
 
       <label style={{ ...styles.card, display: "flex", alignItems: "center", gap: 8, marginBottom: 14, padding: "10px 14px" }}>
         <Search size={16} color="#9A9A94" />
-        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por brinco ou raça" style={styles.input} />
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por brinco (visual ou RFID) ou raça" style={styles.input} />
       </label>
+
+      <div style={styles.hardwareHint}>Pode apontar o bastão RFID aqui pra ir direto na ficha do animal.</div>
+      {avisoScan && <div style={{ ...styles.errorBox, marginTop: 10 }}>{avisoScan}</div>}
 
       {listaFiltrada.length === 0 && <EmptyHint text="Nenhum animal cadastrado ainda." />}
 
@@ -59,7 +85,10 @@ export default function AnimaisTab({ dados }) {
           <div style={styles.avatar}><TagIcon size={17} /></div>
           <div style={{ flex: 1, textAlign: "left" }}>
             <div style={styles.listItemTitle}>{a.brinco_atual}</div>
-            <div style={styles.listItemSub}>{[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}</div>
+            <div style={styles.listItemSub}>
+              {[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}
+              {a.brinco_rfid ? ` · RFID ${a.brinco_rfid}` : ""}
+            </div>
           </div>
           <Tag cor={a.situacao === "ativo" ? "green" : a.situacao === "morto" ? "red" : "orange"}>{SITUACOES[a.situacao] || a.situacao}</Tag>
         </button>
@@ -71,6 +100,7 @@ export default function AnimaisTab({ dados }) {
 // ---------- Formulário de cadastro (com captura RFID) ----------
 function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
   const [brinco, setBrinco] = useState(inicial?.brinco_atual || "");
+  const [brincoRfid, setBrincoRfid] = useState(inicial?.brinco_rfid || "");
   const [sexo, setSexo] = useState(inicial?.sexo || "femea");
   const [raca, setRaca] = useState(inicial?.raca || "");
   const [origem, setOrigem] = useState(inicial?.origem || "");
@@ -83,19 +113,24 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
-  const aoLerTag = useCallback((tag) => setBrinco(tag), []);
+  const aoLerTag = useCallback((tag) => setBrincoRfid(tag), []);
   const { lendo } = useRfidScanner(aoLerTag);
 
   async function handleSalvar() {
-    if (!brinco.trim()) {
-      setErro("Informe o número do brinco (ou aponte o bastão RFID).");
+    // Fazenda que só usa RFID (sem brinco visual): usa o próprio código
+    // RFID como identificador principal também, já que brinco_atual é
+    // obrigatório no cadastro.
+    const brincoFinal = brinco.trim() || brincoRfid.trim();
+    if (!brincoFinal) {
+      setErro("Informe o brinco visual ou aponte o bastão RFID.");
       return;
     }
     setErro("");
     setSalvando(true);
     try {
       await onSalvar({
-        brinco_atual: brinco.trim(),
+        brinco_atual: brincoFinal,
+        brinco_rfid: brincoRfid.trim() || null,
         sexo,
         raca: raca || null,
         origem: origem || null,
@@ -120,12 +155,13 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
       <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
         <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
         <div style={{ ...styles.scanBoxText, color: lendo ? "#fff" : "#1F4D45" }}>
-          {lendo ? "Lendo..." : "Aponte o bastão RFID para preencher o brinco automaticamente"}
+          {lendo ? "Lendo..." : "Aponte o bastão RFID para preencher o brinco eletrônico automaticamente"}
         </div>
       </div>
 
       <div style={styles.card}>
-        <InputField label="Brinco" value={brinco} onChange={setBrinco} placeholder="Número do brinco" />
+        <InputField label="Brinco visual" value={brinco} onChange={setBrinco} placeholder="Número do brinco (se a fazenda usa)" />
+        <InputField label="Brinco RFID (eletrônico)" value={brincoRfid} onChange={setBrincoRfid} placeholder="Lido pelo bastão, ou digite" />
         <SelectField label="Sexo" value={sexo} onChange={setSexo} options={[{ value: "femea", label: "Fêmea" }, { value: "macho", label: "Macho" }]} />
         <InputField label="Raça" value={raca} onChange={setRaca} placeholder="Ex: Nelore" />
         <InputField label="Categoria" value={categoria} onChange={setCategoria} placeholder="Ex: Bezerro, Novilha, Boi" />
@@ -200,6 +236,7 @@ function FichaAnimal({ dados, animal, onVoltar }) {
 
       <div style={styles.card}>
         <Field label="Situação" value={SITUACOES[animal.situacao] || animal.situacao} highlight />
+        {animal.brinco_rfid && <Field label="Brinco RFID (eletrônico)" value={animal.brinco_rfid} />}
         <Field label="Sexo" value={animal.sexo === "macho" ? "Macho" : "Fêmea"} />
         <Field label="Raça" value={animal.raca || "—"} />
         <Field label="Categoria" value={animal.categoria || "—"} />

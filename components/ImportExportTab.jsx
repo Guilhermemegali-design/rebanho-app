@@ -45,6 +45,7 @@ export default function ImportExportTab({ dados, onVoltar }) {
       const fornecedor = dados.fornecedores.find((f) => f.id === a.fornecedor_id);
       return {
         Brinco: a.brinco_atual,
+        "Brinco RFID": a.brinco_rfid || "",
         Sexo: a.sexo === "macho" ? "Macho" : "Fêmea",
         Raça: a.raca || "",
         Categoria: a.categoria || "",
@@ -78,8 +79,13 @@ export default function ImportExportTab({ dados, onVoltar }) {
       if (linhas.length < 2) throw new Error("Planilha vazia ou sem linhas de dados.");
 
       const cabecalho = linhas[0];
-      const idxBrinco = indiceColuna(cabecalho, ["brinco"]);
-      if (idxBrinco === -1) throw new Error('Não encontrei a coluna "Brinco" na planilha — confira o cabeçalho.');
+      const idxBrincoRfid = indiceColuna(cabecalho, ["rfid"]);
+      const idxBrinco = cabecalho.findIndex(
+        (c, i) => i !== idxBrincoRfid && c != null && String(c).toLowerCase().includes("brinco")
+      );
+      if (idxBrinco === -1 && idxBrincoRfid === -1) {
+        throw new Error('Não encontrei a coluna "Brinco" (visual ou RFID) na planilha — confira o cabeçalho.');
+      }
 
       const idxSexo = indiceColuna(cabecalho, ["sexo"]);
       const idxRaca = indiceColuna(cabecalho, ["raça", "raca"]);
@@ -93,11 +99,16 @@ export default function ImportExportTab({ dados, onVoltar }) {
       let ignoradas = 0;
       for (const linha of linhas.slice(1)) {
         if (!linha || linha.every((v) => v == null || v === "")) continue;
-        const brinco = linha[idxBrinco];
+        const brincoVisual = idxBrinco !== -1 ? linha[idxBrinco] : null;
+        const brincoRfid = idxBrincoRfid !== -1 ? linha[idxBrincoRfid] : null;
+        // Fazenda que só usa RFID (sem coluna de brinco visual, ou linha
+        // sem valor nela): usa o código RFID como identificador principal.
+        const brinco = brincoVisual || brincoRfid;
         if (!brinco) { ignoradas++; continue; }
         const sexoTexto = idxSexo !== -1 ? String(linha[idxSexo] || "").toLowerCase() : "";
         registros.push({
           brinco_atual: String(brinco).trim(),
+          brinco_rfid: brincoRfid ? String(brincoRfid).trim() : null,
           sexo: sexoTexto.startsWith("m") ? "macho" : "femea",
           raca: idxRaca !== -1 ? linha[idxRaca] || null : null,
           categoria: idxCategoria !== -1 ? linha[idxCategoria] || null : null,
@@ -150,7 +161,7 @@ export default function ImportExportTab({ dados, onVoltar }) {
       <SectionTitle>Importar</SectionTitle>
       <div style={styles.card}>
         <div style={{ padding: "12px 0", fontSize: 13.5, color: "#5C5C58" }}>
-          Planilha Excel ou CSV com uma linha por animal e coluna "Brinco" (obrigatória). Colunas opcionais reconhecidas: Sexo, Raça, Categoria, Origem, Data de entrada, Peso, Valor.
+          Planilha Excel ou CSV com uma linha por animal e coluna "Brinco" e/ou "Brinco RFID" (pelo menos uma é obrigatória). Colunas opcionais reconhecidas: Sexo, Raça, Categoria, Origem, Data de entrada, Peso, Valor.
         </div>
         <input
           ref={inputRef}

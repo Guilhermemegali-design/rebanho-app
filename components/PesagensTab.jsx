@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, calcularGmd } from "@/lib/format";
-import { useRfidScanner } from "@/lib/rfid";
+import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { useBluetoothScale } from "@/lib/bluetoothScale";
 import { Radio, Bluetooth, BluetoothConnected, Scale } from "lucide-react";
 import { ListHeader, BackHeader, EmptyHint, SelectField, InputField, PrimaryButton } from "@/components/UI";
@@ -53,7 +53,7 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
 
   const aoLerTag = useCallback(
     (tag) => {
-      const animal = dados.animais.find((a) => a.brinco_atual.toLowerCase() === tag.toLowerCase());
+      const animal = encontrarAnimalPorTag(dados.animais, tag);
       if (animal) setAnimalId(animal.id);
       else setErro(`Nenhum animal encontrado com o brinco "${tag}".`);
     },

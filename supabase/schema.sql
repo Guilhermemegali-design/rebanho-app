@@ -111,6 +111,10 @@ create table rebanho_animais (
   consultor_id uuid not null references auth.users(id) on delete cascade,
   cliente_id uuid not null references clientes(id) on delete cascade,
   brinco_atual text not null,
+  -- Fazendas que usam brinco visual E bastão RFID têm dois números
+  -- diferentes por animal — coluna opcional (nem toda fazenda usa RFID).
+  -- Quando a fazenda usa só RFID, brinco_atual recebe o mesmo valor.
+  brinco_rfid text,
   sexo text check (sexo in ('macho', 'femea')),
   raca text,
   origem text,
@@ -144,6 +148,7 @@ create policy "cliente_edita_animais" on rebanho_animais
 
 create index idx_rebanho_animais_cliente on rebanho_animais(cliente_id);
 create index idx_rebanho_animais_brinco on rebanho_animais(brinco_atual);
+create index idx_rebanho_animais_brinco_rfid on rebanho_animais(brinco_rfid);
 
 -- ------------------------------------------------------------
 -- TABELA: rebanho_lote_participacoes
