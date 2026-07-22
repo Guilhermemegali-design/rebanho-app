@@ -3,7 +3,7 @@
 import { useState, useRef } from "react";
 import { styles } from "@/lib/styles";
 import { Download, Upload, FileSpreadsheet } from "lucide-react";
-import { BackHeader, PrimaryButton, SectionTitle } from "@/components/UI";
+import { PrimaryButton, SectionTitle } from "@/components/UI";
 
 function indiceColuna(cabecalho, termos) {
   return cabecalho.findIndex((c) => c != null && termos.some((t) => String(c).toLowerCase().includes(t)));
@@ -29,7 +29,7 @@ function normalizarData(valor) {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function ImportExportTab({ dados, onVoltar }) {
+export default function ImportExportTab({ dados }) {
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
   const [preview, setPreview] = useState(null);
@@ -146,8 +146,6 @@ export default function ImportExportTab({ dados, onVoltar }) {
 
   return (
     <div>
-      <BackHeader title="Importar / Exportar" onBack={onVoltar} />
-
       <SectionTitle>Exportar</SectionTitle>
       <div style={styles.card}>
         <div style={{ padding: "12px 0", fontSize: 13.5, color: "#5C5C58" }}>

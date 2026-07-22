@@ -4,27 +4,34 @@ import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL, calcularGmd } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Search, Tag as TagIcon, Radio, Scale, ArrowLeftRight, Syringe, PlusCircle } from "lucide-react";
-import { ListHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, Tag, SectionTitle } from "@/components/UI";
+import { statusAnimal } from "@/lib/alerts";
+import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, ArrowLeftRight, Syringe } from "lucide-react";
+import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const SITUACOES = { ativo: "Ativo", vendido: "Vendido", morto: "Morto", transferido: "Transferido" };
+const STATUS_BADGE_STYLE = { ativo: styles.statusBadgeAtivo, atencao: styles.statusBadgeAtencao, carencia: styles.statusBadgeCarencia, neutro: styles.tagOrange };
 
 export default function AnimaisTab({ dados }) {
   const [busca, setBusca] = useState("");
+  const [loteFiltro, setLoteFiltro] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState("");
   const [modo, setModo] = useState("lista"); // lista | novo | detalhe
   const [animalSelecionado, setAnimalSelecionado] = useState(null);
   const [avisoScan, setAvisoScan] = useState("");
 
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (!termo) return dados.animais;
-    return dados.animais.filter(
-      (a) =>
+    return dados.animais.filter((a) => {
+      if (loteFiltro && a.lote_atual_id !== loteFiltro) return false;
+      if (statusFiltro && a.situacao !== statusFiltro) return false;
+      if (!termo) return true;
+      return (
         a.brinco_atual.toLowerCase().includes(termo) ||
         (a.brinco_rfid || "").toLowerCase().includes(termo) ||
         (a.raca || "").toLowerCase().includes(termo)
-    );
-  }, [dados.animais, busca]);
+      );
+    });
+  }, [dados.animais, busca, loteFiltro, statusFiltro]);
 
   // Aponta o bastão em qualquer lugar da lista pra pular direto pra
   // ficha do animal — funciona tanto pelo brinco visual quanto pelo RFID.
@@ -68,33 +75,117 @@ export default function AnimaisTab({ dados }) {
 
   return (
     <div>
-      <ListHeader title="Animais" actionLabel="Novo" onAction={() => setModo("novo")} />
-
-      <label style={{ ...styles.card, display: "flex", alignItems: "center", gap: 8, marginBottom: 14, padding: "10px 14px" }}>
-        <Search size={16} color="#9A9A94" />
-        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por brinco (visual ou RFID) ou raça" style={styles.input} />
-      </label>
+      <PageHeader
+        title="Animais"
+        subtitle="Cadastro individual e histórico completo do rebanho."
+        actionLabel="Novo animal"
+        onAction={() => setModo("novo")}
+      />
 
       <div style={styles.hardwareHint}>Pode apontar o bastão RFID aqui pra ir direto na ficha do animal.</div>
-      {avisoScan && <div style={{ ...styles.errorBox, marginTop: 10 }}>{avisoScan}</div>}
+      {avisoScan && <div style={{ ...styles.errorBox, marginTop: 10, marginBottom: 10 }}>{avisoScan}</div>}
 
-      {listaFiltrada.length === 0 && <EmptyHint text="Nenhum animal cadastrado ainda." />}
-
-      {listaFiltrada.map((a) => (
-        <button key={a.id} style={styles.listItem} onClick={() => { setAnimalSelecionado(a); setModo("detalhe"); }}>
-          <div style={styles.avatar}><TagIcon size={17} /></div>
-          <div style={{ flex: 1, textAlign: "left" }}>
-            <div style={styles.listItemTitle}>{a.brinco_atual}</div>
-            <div style={styles.listItemSub}>
-              {[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}
-              {a.brinco_rfid ? ` · RFID ${a.brinco_rfid}` : ""}
-            </div>
+      <div style={styles.tableCard}>
+        <div style={styles.tableFiltersRow}>
+          <div style={styles.tableSearchBox}>
+            <Search size={15} color="#9A9A94" />
+            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar animal (brinco visual, RFID ou raça)" style={styles.input} />
           </div>
-          <Tag cor={a.situacao === "ativo" ? "green" : a.situacao === "morto" ? "red" : "orange"}>{SITUACOES[a.situacao] || a.situacao}</Tag>
-        </button>
-      ))}
+          <select value={loteFiltro} onChange={(e) => setLoteFiltro(e.target.value)} style={styles.tableFilterSelect}>
+            <option value="">Todos os lotes</option>
+            {dados.lotes.map((l) => (
+              <option key={l.id} value={l.id}>{l.nome}</option>
+            ))}
+          </select>
+          <select value={statusFiltro} onChange={(e) => setStatusFiltro(e.target.value)} style={styles.tableFilterSelect}>
+            <option value="">Status</option>
+            {Object.entries(SITUACOES).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <div style={styles.tableCount}>{listaFiltrada.length} animal(is) exibidos</div>
+        </div>
+
+        {listaFiltrada.length === 0 && <EmptyHint text="Nenhum animal encontrado." />}
+
+        {listaFiltrada.length > 0 && (
+          <div className="table-view" style={{ overflowX: "auto" }}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={styles.tableHeadRow}>
+                  <th style={styles.tableTh}>Identificação</th>
+                  <th style={styles.tableTh}>Lote / Local</th>
+                  <th style={styles.tableTh}>Categoria</th>
+                  <th style={styles.tableTh}>Último peso</th>
+                  <th style={styles.tableTh}>GMD</th>
+                  <th style={styles.tableTh}>Status</th>
+                  <th style={styles.tableTh}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {listaFiltrada.map((a) => {
+                  const { ultimaPesagem, gmd } = infoPesoAnimal(a, dados.pesagens);
+                  const lote = dados.lotes.find((l) => l.id === a.lote_atual_id);
+                  const local = dados.locais.find((l) => l.id === a.local_atual_id);
+                  const status = statusAnimal(a, dados);
+                  return (
+                    <tr key={a.id} style={styles.tableRow} onClick={() => { setAnimalSelecionado(a); setModo("detalhe"); }}>
+                      <td style={styles.tableTd}>
+                        <div style={styles.tableCellTitle}>{a.brinco_atual}</div>
+                        <div style={styles.tableCellSub}>{[a.raca, a.sexo === "macho" ? "Macho" : "Fêmea"].filter(Boolean).join(" · ")}</div>
+                      </td>
+                      <td style={styles.tableTd}>
+                        <div style={styles.tableCellTitle}>{lote ? lote.nome : "—"}</div>
+                        <div style={styles.tableCellSub}>{local ? local.nome : "Sem local"}</div>
+                      </td>
+                      <td style={styles.tableTd}>{a.categoria || "—"}</td>
+                      <td style={styles.tableTd}>{ultimaPesagem ? formatKg(ultimaPesagem.peso) : "—"}</td>
+                      <td style={styles.tableTd}>
+                        {gmd != null ? <span style={gmd >= 0.5 ? styles.gmdBom : styles.gmdBaixo}>{gmd.toFixed(2)} kg/d</span> : "—"}
+                      </td>
+                      <td style={styles.tableTd}>
+                        <span style={{ ...styles.statusBadge, ...STATUS_BADGE_STYLE[status.cor] }}>{status.rotulo}</span>
+                      </td>
+                      <td style={{ ...styles.tableTd, textAlign: "right" }}><ChevronRight size={16} color="#C9C7BE" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="card-view" style={{ padding: listaFiltrada.length > 0 ? "10px 14px 14px" : 0 }}>
+          {listaFiltrada.map((a) => {
+            const status = statusAnimal(a, dados);
+            return (
+              <button key={a.id} style={styles.listItem} onClick={() => { setAnimalSelecionado(a); setModo("detalhe"); }}>
+                <div style={styles.avatar}><TagIcon size={17} /></div>
+                <div style={{ flex: 1, textAlign: "left" }}>
+                  <div style={styles.listItemTitle}>{a.brinco_atual}</div>
+                  <div style={styles.listItemSub}>
+                    {[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}
+                    {a.brinco_rfid ? ` · RFID ${a.brinco_rfid}` : ""}
+                  </div>
+                </div>
+                <span style={{ ...styles.statusBadge, ...STATUS_BADGE_STYLE[status.cor] }}>{status.rotulo}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
+}
+
+function infoPesoAnimal(animal, pesagens) {
+  const historico = [...pesagens.filter((p) => p.animal_id === animal.id)].sort((a, b) => a.data.localeCompare(b.data));
+  const ultimaPesagem = historico[historico.length - 1];
+  const penultimaPesagem = historico[historico.length - 2];
+  const gmd = penultimaPesagem && ultimaPesagem
+    ? calcularGmd(penultimaPesagem.peso, penultimaPesagem.data, ultimaPesagem.peso, ultimaPesagem.data)
+    : null;
+  return { ultimaPesagem, gmd };
 }
 
 // ---------- Formulário de cadastro (com captura RFID) ----------

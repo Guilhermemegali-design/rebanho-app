@@ -16,6 +16,24 @@ export function ListHeader({ title, actionLabel, onAction }) {
   );
 }
 
+// Cabeçalho de página maior (título + subtítulo + botão de ação),
+// usado no topo de cada aba principal (desktop e mobile).
+export function PageHeader({ title, subtitle, actionLabel, onAction }) {
+  return (
+    <div style={styles.pageHeader}>
+      <div>
+        <h1 style={styles.pageHeaderTitle}>{title}</h1>
+        {subtitle && <div style={styles.pageHeaderSub}>{subtitle}</div>}
+      </div>
+      {actionLabel && (
+        <button style={styles.pageHeaderBtn} onClick={onAction}>
+          <Plus size={16} /> {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function BackHeader({ title, onBack, semMargem }) {
   return (
     <div style={semMargem ? { ...styles.backHeader, marginBottom: 0 } : styles.backHeader}>

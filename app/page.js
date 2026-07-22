@@ -1,18 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { styles } from "@/lib/styles";
 import { useDadosRebanho } from "@/lib/useDadosRebanho";
 import { useConexao } from "@/lib/useConexao";
-import { LogOut, Wifi, WifiOff, RefreshCw, LayoutDashboard, Tag as TagIcon, MapPin, Scale, Stethoscope, ArrowLeftRight, FileSpreadsheet } from "lucide-react";
+import { calcularAlertas } from "@/lib/alerts";
+import { Wifi, WifiOff, RefreshCw, Menu } from "lucide-react";
+import Sidebar, { ABAS_SIDEBAR } from "@/components/Sidebar";
 import PainelTab from "@/components/PainelTab";
 import AnimaisTab from "@/components/AnimaisTab";
 import LocaisLotesTab from "@/components/LocaisLotesTab";
 import MovimentacoesTab from "@/components/MovimentacoesTab";
 import PesagensTab from "@/components/PesagensTab";
 import SanidadeTab from "@/components/SanidadeTab";
-import ImportExportTab from "@/components/ImportExportTab";
+import AlertasTab from "@/components/AlertasTab";
+import ConfiguracoesTab from "@/components/ConfiguracoesTab";
 
 // Mesmo UID do consultor usado no Consultoria-main e no
 // Confinamento-main (é a mesma pessoa logada nos três apps). O
@@ -190,12 +193,12 @@ function ResolveAcessoOperador({ sessao }) {
   if (vinculos.length === 0) return <TelaVincularConvite onVinculado={carregarVinculos} />;
 
   if (fazendaEscolhida) {
-    return <AppPrincipal consultorId={sessao.user.id} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} />;
+    return <AppPrincipal consultorId={sessao.user.id} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} />;
   }
 
   if (vinculos.length === 1) {
     const c = vinculos[0].clientes;
-    return <AppPrincipal consultorId={sessao.user.id} clienteId={c.id} clienteNome={c.nome} isConsultor={false} />;
+    return <AppPrincipal consultorId={sessao.user.id} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} />;
   }
 
   return (
@@ -233,6 +236,7 @@ function SeletorFazendaConsultor({ sessao }) {
     return (
       <AppPrincipal
         consultorId={sessao.user.id}
+        usuarioEmail={sessao.user.email}
         clienteId={fazendaEscolhida.id}
         clienteNome={fazendaEscolhida.nome}
         isConsultor
@@ -262,83 +266,99 @@ function SeletorFazendaConsultor({ sessao }) {
   );
 }
 
+const DATA_FORMATTER = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+
 // ---------- App principal (depois de resolvido o acesso) ----------
-function AppPrincipal({ consultorId, clienteId, clienteNome, isConsultor, onTrocarFazenda }) {
+function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, onTrocarFazenda }) {
   const [tab, setTab] = useState("painel");
+  const [menuAberto, setMenuAberto] = useState(false);
   const dados = useDadosRebanho(consultorId, clienteId);
   const { online, sincronizando, pendentes, sincronizar } = useConexao(consultorId);
 
-  const abas = [
-    { id: "painel", label: "Painel", icon: LayoutDashboard },
-    { id: "animais", label: "Animais", icon: TagIcon },
-    { id: "locais", label: "Locais/Lotes", icon: MapPin },
-    { id: "movimentacoes", label: "Movim.", icon: ArrowLeftRight },
-    { id: "pesagens", label: "Pesagens", icon: Scale },
-    { id: "sanidade", label: "Sanidade", icon: Stethoscope },
-  ];
+  const totalAlertas = useMemo(() => (dados.carregando ? 0 : calcularAlertas(dados).length), [dados]);
+  const tituloAba = ABAS_SIDEBAR.find((a) => a.id === tab)?.label || (tab === "configuracoes" ? "Configurações" : "");
+  const dataHoje = DATA_FORMATTER.format(new Date()).toUpperCase();
+
+  function selecionarTab(id) {
+    setTab(id);
+    setMenuAberto(false);
+  }
 
   return (
-    <div style={styles.app}>
-      <div style={styles.topbar}>
-        <div style={styles.topbarRow}>
-          <div>
-            <div style={styles.brand}>{clienteNome}</div>
-            <div style={styles.brandSub}>{isConsultor ? "Visão do consultor" : "Controle de rebanho"}</div>
+    <div className="app-shell" style={styles.appShell}>
+      <Sidebar
+        tab={tab}
+        onSelecionarTab={selecionarTab}
+        clienteNome={clienteNome}
+        isConsultor={isConsultor}
+        onTrocarFazenda={onTrocarFazenda}
+        totalAlertas={totalAlertas}
+        usuarioEmail={usuarioEmail}
+        isMobileAberta={menuAberto}
+        onFechar={() => setMenuAberto(false)}
+        onSair={() => supabase.auth.signOut()}
+      />
+
+      <div style={styles.mainArea}>
+        {/* Barra do celular: hamburguer + nome da fazenda + status */}
+        <div className="hide-desktop" style={styles.topbar}>
+          <div style={styles.topbarRow}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setMenuAberto(true)} style={styles.iconBtn} title="Menu">
+                <Menu size={18} />
+              </button>
+              <div>
+                <div style={styles.brand}>{clienteNome}</div>
+                <div style={styles.brandSub}>{tituloAba}</div>
+              </div>
+            </div>
+            <div style={{ ...styles.statusPill, ...(online ? styles.statusOn : styles.statusOff) }}>
+              {online ? <Wifi size={13} /> : <WifiOff size={13} />}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {isConsultor && onTrocarFazenda && (
-              <button onClick={onTrocarFazenda} style={styles.iconBtn} title="Trocar fazenda">
-                <ArrowLeftRight size={16} />
+          {pendentes > 0 && (
+            <div style={styles.syncBar}>
+              <div style={styles.syncBarLeft}>{pendentes} registro(s) aguardando sincronizar</div>
+              <button onClick={sincronizar} disabled={sincronizando || !online} style={styles.syncBtn}>
+                <RefreshCw size={12} className={sincronizando ? "spin" : ""} /> {sincronizando ? "Enviando..." : "Enviar agora"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Barra fina do desktop: data + status + sincronizar */}
+        <div className="show-desktop" style={styles.slimTopbar}>
+          <div style={styles.slimTopbarDate}>{dataHoje}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {pendentes > 0 && (
+              <button onClick={sincronizar} disabled={sincronizando || !online} style={styles.syncBtn}>
+                <RefreshCw size={12} className={sincronizando ? "spin" : ""} /> {sincronizando ? "Enviando..." : `${pendentes} pendente(s) — enviar agora`}
               </button>
             )}
             <div style={{ ...styles.statusPill, ...(online ? styles.statusOn : styles.statusOff) }}>
               {online ? <Wifi size={13} /> : <WifiOff size={13} />}
-              {online ? "Online" : "Offline"}
+              {online ? "Online" : "Offline"}{pendentes === 0 && online ? " · Tudo sincronizado" : ""}
             </div>
-            <button onClick={() => setTab("importexport")} style={styles.iconBtn} title="Importar/Exportar">
-              <FileSpreadsheet size={16} />
-            </button>
-            <button onClick={() => supabase.auth.signOut()} style={styles.iconBtn} title="Sair">
-              <LogOut size={16} />
-            </button>
           </div>
         </div>
-        {pendentes > 0 && (
-          <div style={styles.syncBar}>
-            <div style={styles.syncBarLeft}>{pendentes} registro(s) aguardando sincronizar</div>
-            <button onClick={sincronizar} disabled={sincronizando || !online} style={styles.syncBtn}>
-              <RefreshCw size={12} className={sincronizando ? "spin" : ""} /> {sincronizando ? "Enviando..." : "Enviar agora"}
-            </button>
-          </div>
-        )}
-      </div>
 
-      <div style={styles.content}>
-        {dados.carregando ? (
-          <div style={styles.loadingScreen}>Carregando dados...</div>
-        ) : (
-          <>
-            {tab === "painel" && <PainelTab dados={dados} />}
-            {tab === "animais" && <AnimaisTab dados={dados} />}
-            {tab === "locais" && <LocaisLotesTab dados={dados} />}
-            {tab === "movimentacoes" && <MovimentacoesTab dados={dados} />}
-            {tab === "pesagens" && <PesagensTab dados={dados} />}
-            {tab === "sanidade" && <SanidadeTab dados={dados} />}
-            {tab === "importexport" && <ImportExportTab dados={dados} onVoltar={() => setTab("painel")} />}
-          </>
-        )}
+        <div className="content-area" style={styles.content}>
+          {dados.carregando ? (
+            <div style={styles.loadingScreen}>Carregando dados...</div>
+          ) : (
+            <>
+              {tab === "painel" && <PainelTab dados={dados} />}
+              {tab === "animais" && <AnimaisTab dados={dados} />}
+              {tab === "locais" && <LocaisLotesTab dados={dados} />}
+              {tab === "movimentacoes" && <MovimentacoesTab dados={dados} />}
+              {tab === "pesagens" && <PesagensTab dados={dados} />}
+              {tab === "sanidade" && <SanidadeTab dados={dados} />}
+              {tab === "alertas" && <AlertasTab dados={dados} />}
+              {tab === "configuracoes" && <ConfiguracoesTab dados={dados} />}
+            </>
+          )}
+        </div>
       </div>
-
-      {tab !== "importexport" && (
-      <div style={styles.bottomNav}>
-        {abas.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setTab(id)} style={{ ...styles.navBtn, ...(tab === id ? styles.navBtnActive : {}) }}>
-            <Icon size={19} strokeWidth={tab === id ? 2.4 : 1.8} />
-            <span style={{ fontWeight: tab === id ? 600 : 500 }}>{label}</span>
-          </button>
-        ))}
-      </div>
-      )}
     </div>
   );
 }

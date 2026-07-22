@@ -5,7 +5,7 @@ import { styles } from "@/lib/styles";
 import { formatDataBR } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { Radio, Syringe, Plus } from "lucide-react";
-import { ListHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
+import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = { vacina: "Vacinação", vermifugo: "Vermifugação", diagnostico: "Diagnóstico", tratamento: "Tratamento" };
 
@@ -23,7 +23,7 @@ export default function SanidadeTab({ dados }) {
 
   return (
     <div>
-      <ListHeader title="Sanidade" actionLabel="Registrar" onAction={() => setModo("novo")} />
+      <PageHeader title="Sanidade" subtitle="Vacinação, vermifugação, diagnóstico e tratamento." actionLabel="Registrar" onAction={() => setModo("novo")} />
       {recentes.length === 0 && <EmptyHint text="Nenhum procedimento sanitário registrado ainda." />}
       {recentes.map((p) => {
         const animal = dados.animais.find((a) => a.id === p.animal_id);

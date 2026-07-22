@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { styles } from "@/lib/styles";
 import { MapPin, Layers } from "lucide-react";
-import { ListHeader, BackHeader, EmptyHint, InputField, SelectField, PrimaryButton } from "@/components/UI";
+import { ListHeader, PageHeader, BackHeader, EmptyHint, InputField, SelectField, PrimaryButton } from "@/components/UI";
 
 const TIPOS_LOCAL = { pasto: "Pasto", curral: "Curral", baia: "Baia", outro: "Outro" };
 
@@ -13,6 +13,7 @@ export default function LocaisLotesTab({ dados }) {
 
   return (
     <div>
+      {modo === "lista" && <PageHeader title="Lotes e locais" subtitle="Pastos, currais e agrupamentos de animais na fazenda." />}
       <div style={styles.viewToggle}>
         <button onClick={() => { setSub("locais"); setModo("lista"); }} style={sub === "locais" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Locais</button>
         <button onClick={() => { setSub("lotes"); setModo("lista"); }} style={sub === "lotes" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Lotes</button>

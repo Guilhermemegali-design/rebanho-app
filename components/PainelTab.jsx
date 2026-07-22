@@ -3,10 +3,9 @@
 import { useMemo } from "react";
 import { styles } from "@/lib/styles";
 import { formatKg, formatDataBR, calcularGmd } from "@/lib/format";
+import { calcularAlertas } from "@/lib/alerts";
 import { Users, TrendingUp, AlertTriangle, Syringe, Scale } from "lucide-react";
-import { EmptyHint } from "@/components/UI";
-
-const DIAS_SEM_PESAGEM_ALERTA = 45;
+import { EmptyHint, PageHeader } from "@/components/UI";
 
 export default function PainelTab({ dados }) {
   const { animais, locais, lotes, pesagens, procedimentos } = dados;
@@ -36,42 +35,14 @@ export default function PainelTab({ dados }) {
 
   // Alertas calculados na hora — nunca ficam desatualizados porque não
   // existe uma tabela separada de alertas pra sincronizar.
-  const alertas = useMemo(() => {
-    const lista = [];
-    const hoje = new Date();
-
-    for (const animal of ativos) {
-      const historico = pesagens.filter((p) => p.animal_id === animal.id).sort((a, b) => b.data.localeCompare(a.data));
-      const ultima = historico[0];
-      const diasSemPesar = ultima
-        ? Math.round((hoje - new Date(ultima.data + "T00:00:00")) / 86400000)
-        : Math.round((hoje - new Date(animal.data_entrada + "T00:00:00")) / 86400000);
-      if (diasSemPesar >= DIAS_SEM_PESAGEM_ALERTA) {
-        lista.push({ tipo: "peso", animal, texto: `${animal.brinco_atual} sem pesagem há ${diasSemPesar} dias` });
-      }
-    }
-
-    for (const p of procedimentos) {
-      if (!p.carencia_dias || !p.data_aplicacao) continue;
-      const fimCarencia = new Date(p.data_aplicacao + "T00:00:00");
-      fimCarencia.setDate(fimCarencia.getDate() + p.carencia_dias);
-      if (fimCarencia >= hoje) {
-        const animal = ativos.find((a) => a.id === p.animal_id);
-        if (animal) {
-          const diasRestantes = Math.round((fimCarencia - hoje) / 86400000);
-          lista.push({ tipo: "carencia", animal, texto: `${animal.brinco_atual} em carência (${diasRestantes}d restantes)` });
-        }
-      }
-    }
-
-    return lista.slice(0, 20);
-  }, [ativos, pesagens, procedimentos]);
+  const todosAlertas = useMemo(() => calcularAlertas({ animais, pesagens, procedimentos }), [animais, pesagens, procedimentos]);
+  const alertas = todosAlertas.slice(0, 20);
 
   return (
     <div>
-      <h1 style={styles.h1}>Painel</h1>
+      <PageHeader title="Painel" subtitle="Indicadores gerais do rebanho." />
 
-      <div style={{ ...styles.kpiGrid, marginTop: 14 }}>
+      <div style={styles.kpiGrid}>
         <div style={styles.kpiCard}>
           <div style={styles.kpiHeader}><Users size={14} /> Ativos</div>
           <div style={styles.kpiValor}>{ativos.length}</div>

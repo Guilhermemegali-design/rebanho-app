@@ -6,7 +6,7 @@ import { formatDataBR, formatKg, calcularGmd } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { useBluetoothScale } from "@/lib/bluetoothScale";
 import { Radio, Bluetooth, BluetoothConnected, Scale } from "lucide-react";
-import { ListHeader, BackHeader, EmptyHint, SelectField, InputField, PrimaryButton } from "@/components/UI";
+import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, PrimaryButton } from "@/components/UI";
 
 export default function PesagensTab({ dados }) {
   const [modo, setModo] = useState("lista");
@@ -22,7 +22,7 @@ export default function PesagensTab({ dados }) {
 
   return (
     <div>
-      <ListHeader title="Pesagens" actionLabel="Pesar animal" onAction={() => setModo("nova")} />
+      <PageHeader title="Pesagens" subtitle="Histórico de peso e ganho médio diário do rebanho." actionLabel="Pesar animal" onAction={() => setModo("nova")} />
       {recentes.length === 0 && <EmptyHint text="Nenhuma pesagem registrada ainda." />}
       {recentes.map((p) => {
         const animal = dados.animais.find((a) => a.id === p.animal_id);

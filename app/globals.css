@@ -32,3 +32,92 @@ input, textarea, select {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ============================================================
+   LAYOUT RESPONSIVO
+   Um único ponto de corte: abaixo dele é o app "de celular" (barra
+   de baixo, listas em cartão, sidebar vira gaveta); a partir dele é
+   o app "de computador" (sidebar fixa, tabelas).
+   ============================================================ */
+:root {
+  --breakpoint-desktop: 880px;
+}
+
+.sidebar-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 26, 22, 0.45);
+  z-index: 40;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.sidebar-shell {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 260px;
+  z-index: 50;
+  transform: translateX(-100%);
+  transition: transform 0.22s ease;
+}
+
+.sidebar-shell.aberta {
+  transform: translateX(0);
+}
+
+.hide-desktop {
+  display: block;
+}
+
+.show-desktop {
+  display: none;
+}
+
+.table-view {
+  display: none;
+}
+
+.card-view {
+  display: block;
+}
+
+@media (min-width: 880px) {
+  .sidebar-shell {
+    position: sticky;
+    transform: none;
+    transition: none;
+  }
+
+  .hide-desktop {
+    display: none !important;
+  }
+
+  .show-desktop {
+    display: flex !important;
+  }
+
+  .table-view {
+    display: block;
+  }
+
+  .card-view {
+    display: none;
+  }
+
+  .app-shell {
+    flex-direction: row !important;
+    max-width: none !important;
+  }
+
+  .content-area {
+    max-width: 1180px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}

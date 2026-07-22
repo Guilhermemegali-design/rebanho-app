@@ -5,7 +5,7 @@ import { styles } from "@/lib/styles";
 import { formatDataBR } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { Radio, ArrowLeftRight } from "lucide-react";
-import { ListHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
+import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = {
   entrada: "Entrada",
@@ -30,7 +30,7 @@ export default function MovimentacoesTab({ dados }) {
 
   return (
     <div>
-      <ListHeader title="Movimentações" actionLabel="Registrar" onAction={() => setModo("nova")} />
+      <PageHeader title="Movimentações" subtitle="Entradas, transferências e saídas do rebanho." actionLabel="Registrar" onAction={() => setModo("nova")} />
       {recentes.length === 0 && <EmptyHint text="Nenhuma movimentação registrada ainda." />}
       {recentes.map((m) => {
         const animal = dados.animais.find((a) => a.id === m.animal_id);
