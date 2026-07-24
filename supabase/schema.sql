@@ -245,6 +245,18 @@ create policy "cliente_registra_movimentacao" on rebanho_movimentacoes
     animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
   );
 
+create policy "cliente_exclui_movimentacao" on rebanho_movimentacoes
+  for delete to authenticated
+  using (
+    animal_id in (
+      select a.id from rebanho_animais a
+      where a.cliente_id in (
+        select cliente_id from clientes_usuarios
+        where auth_user_id = (select auth.uid())
+      )
+    )
+  );
+
 create index idx_rebanho_movimentacoes_animal on rebanho_movimentacoes(animal_id, data);
 
 -- ------------------------------------------------------------
@@ -352,6 +364,18 @@ create policy "cliente_ve_procedimentos" on rebanho_procedimentos_sanitarios
 create policy "cliente_registra_procedimento" on rebanho_procedimentos_sanitarios
   for insert with check (
     animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
+  );
+
+create policy "cliente_exclui_procedimento" on rebanho_procedimentos_sanitarios
+  for delete to authenticated
+  using (
+    animal_id in (
+      select a.id from rebanho_animais a
+      where a.cliente_id in (
+        select cliente_id from clientes_usuarios
+        where auth_user_id = (select auth.uid())
+      )
+    )
   );
 
 create index idx_rebanho_procedimentos_animal on rebanho_procedimentos_sanitarios(animal_id, data_aplicacao);

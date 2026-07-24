@@ -155,6 +155,8 @@ operador aos animais da própria fazenda.
   vazio quando existem duas pesagens registradas na mesma data.
 - Cada pesagem pode ser excluída diretamente pela lista. Registros ainda
   offline também saem da fila local para não reaparecerem na sincronização.
+- A ficha do animal permite excluir diretamente cada item da linha do
+  tempo: pesagem, movimentação ou manejo sanitário.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 

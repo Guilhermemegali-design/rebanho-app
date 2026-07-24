@@ -792,6 +792,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
 // ---------- Ficha individual ----------
 function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
   const [editando, setEditando] = useState(false);
+  const [excluindoTimeline, setExcluindoTimeline] = useState(null);
 
   const lote = dados.lotes.find((l) => l.id === animal.lote_atual_id);
   const local = dados.locais.find((l) => l.id === animal.local_atual_id);
@@ -805,19 +806,33 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
   const timeline = useMemo(() => {
     const itens = [];
     for (const p of dados.pesagens.filter((x) => x.animal_id === animal.id)) {
-      itens.push({ data: p.data, tipo: "pesagem", icone: Scale, titulo: `Pesagem: ${formatKg(p.peso)}`, sub: p.origem_peso === "bluetooth" ? "Via balança Bluetooth" : "Digitado manualmente" });
+      itens.push({ id: p.id || p.client_uuid, data: p.data, tipo: "pesagem", registro: p, icone: Scale, titulo: `Pesagem: ${formatKg(p.peso)}`, sub: p.origem_peso === "bluetooth" ? "Via balança Bluetooth" : "Digitado manualmente" });
     }
     for (const m of dados.movimentacoes.filter((x) => x.animal_id === animal.id)) {
       const dadosVenda = m.tipo === "venda"
         ? [`Peso: ${formatKg(m.peso_saida)}`, `Arroba: ${formatBRL(m.preco_arroba)}`, `Rendimento: ${m.rendimento_carcaca ?? "—"}%`].join(" · ")
         : "";
-      itens.push({ data: m.data, tipo: "movimentacao", icone: ArrowLeftRight, titulo: rotuloMovimentacao(m), sub: [dadosVenda, m.observacoes].filter(Boolean).join(" · ") });
+      itens.push({ id: m.id || m.client_uuid, data: m.data, tipo: "movimentacao", registro: m, icone: ArrowLeftRight, titulo: rotuloMovimentacao(m), sub: [dadosVenda, m.observacoes].filter(Boolean).join(" · ") });
     }
     for (const p of dados.procedimentos.filter((x) => x.animal_id === animal.id)) {
-      itens.push({ data: p.data_aplicacao, tipo: "sanidade", icone: Syringe, titulo: rotuloProcedimento(p, dados.medicamentos), sub: p.observacoes || "" });
+      itens.push({ id: p.id || p.client_uuid, data: p.data_aplicacao, tipo: "sanidade", registro: p, icone: Syringe, titulo: rotuloProcedimento(p, dados.medicamentos), sub: p.observacoes || "" });
     }
     return itens.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   }, [dados, animal.id]);
+
+  async function excluirItemTimeline(item) {
+    if (!window.confirm(`Excluir "${item.titulo}" de ${formatDataBR(item.data)}?`)) return;
+    setExcluindoTimeline(item.id);
+    try {
+      if (item.tipo === "pesagem") await dados.excluirPesagem(item.registro);
+      if (item.tipo === "movimentacao") await dados.excluirMovimentacao(item.registro);
+      if (item.tipo === "sanidade") await dados.excluirProcedimento(item.registro);
+    } catch (err) {
+      window.alert(err.message || "Não foi possível excluir esta informação.");
+    } finally {
+      setExcluindoTimeline(null);
+    }
+  }
 
   if (editando) {
     return (
@@ -880,13 +895,23 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
         {timeline.map((item, i) => {
           const Icone = item.icone;
           return (
-            <div key={i} style={styles.timelineItem}>
+            <div key={`${item.tipo}-${item.id || i}`} style={styles.timelineItem}>
               {i < timeline.length - 1 && <div style={styles.timelineLine} />}
               <div style={styles.timelineDot} />
               <div style={styles.timelineContent}>
                 <div style={styles.timelineTitulo}><Icone size={12} style={{ verticalAlign: -1, marginRight: 5 }} />{item.titulo}</div>
                 <div style={styles.timelineData}>{formatDataBR(item.data)}{item.sub ? ` · ${item.sub}` : ""}</div>
               </div>
+              <button
+                type="button"
+                onClick={() => excluirItemTimeline(item)}
+                disabled={excluindoTimeline === item.id}
+                aria-label={`Excluir ${item.titulo}`}
+                title="Excluir informação"
+                style={{ ...styles.iconDangerBtn, marginLeft: 8, opacity: excluindoTimeline === item.id ? 0.5 : 1 }}
+              >
+                <Trash2 size={15} />
+              </button>
             </div>
           );
         })}
