@@ -145,6 +145,10 @@ operador aos animais da própria fazenda.
 - A lista geral de animais oferece exclusão direta ao lado do status, sem
   precisar abrir a ficha. A tela de lotes também permite excluir; os
   animais vinculados são preservados e ficam sem lote.
+- Na pesagem, digitar o brinco visual ou RFID mostra a data e o peso
+  anteriores; ao informar o novo peso, o GMD aparece antes da confirmação.
+- Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
+  ativos de um lote, mantendo um registro individual em cada ficha.
 
 ## RLS (permissões)
 

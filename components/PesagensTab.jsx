@@ -45,6 +45,7 @@ export default function PesagensTab({ dados }) {
 
 function FormPesagem({ dados, onSalvo, onCancelar }) {
   const [animalId, setAnimalId] = useState("");
+  const [brincoDigitado, setBrincoDigitado] = useState("");
   const [peso, setPeso] = useState("");
   const [origemPeso, setOrigemPeso] = useState("manual");
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
@@ -54,7 +55,11 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
   const aoLerTag = useCallback(
     (tag) => {
       const animal = encontrarAnimalPorTag(dados.animais, tag);
-      if (animal) setAnimalId(animal.id);
+      if (animal) {
+        setAnimalId(animal.id);
+        setBrincoDigitado(animal.brinco_atual);
+        setErro("");
+      }
       else setErro(`Nenhum animal encontrado com o brinco "${tag}".`);
     },
     [dados.animais]
@@ -70,6 +75,13 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
   }, [escala.peso]);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
+
+  function handleBrincoDigitado(valor) {
+    setBrincoDigitado(valor);
+    const animal = encontrarAnimalPorTag(dados.animais, valor.trim());
+    setAnimalId(animal?.id || "");
+    setErro("");
+  }
   const ultimaPesagem = useMemo(() => {
     if (!animalId) return null;
     const historico = dados.pesagens.filter((p) => p.animal_id === animalId).sort((a, b) => a.data.localeCompare(b.data));
@@ -112,14 +124,45 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
       </div>
 
       <div style={styles.card}>
+        <InputField
+          label="Digite o brinco visual ou RFID"
+          value={brincoDigitado}
+          onChange={handleBrincoDigitado}
+          placeholder="Ex: 1024"
+        />
         <SelectField
-          label="Animal"
+          label="Ou selecione o animal"
           value={animalId}
-          onChange={setAnimalId}
+          onChange={(id) => {
+            setAnimalId(id);
+            const animal = dados.animais.find((item) => item.id === id);
+            setBrincoDigitado(animal?.brinco_atual || "");
+            setErro("");
+          }}
           options={[{ value: "", label: "Selecione..." }, ...dados.animais.map((a) => ({ value: a.id, label: a.brinco_atual }))]}
         />
         <InputField label="Data" type="date" value={data} onChange={setData} />
       </div>
+
+      {animalEscolhido && (
+        <div style={{ ...styles.card, marginTop: 14 }}>
+          <div style={styles.sectionTitle}>Referência anterior — brinco {animalEscolhido.brinco_atual}</div>
+          {ultimaPesagem ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+              <div>
+                <div style={styles.tableCellSub}>Data anterior</div>
+                <div style={styles.tableCellTitle}>{formatDataBR(ultimaPesagem.data)}</div>
+              </div>
+              <div>
+                <div style={styles.tableCellSub}>Peso anterior</div>
+                <div style={styles.tableCellTitle}>{formatKg(ultimaPesagem.peso)}</div>
+              </div>
+            </div>
+          ) : (
+            <div style={styles.hardwareHint}>Este animal ainda não possui pesagem anterior.</div>
+          )}
+        </div>
+      )}
 
       {escala.suportado ? (
         <button
@@ -149,8 +192,12 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
       </div>
 
       {gmdPrevisto != null && (
-        <div style={{ ...styles.rowCard, marginTop: 10 }}>
-          <div style={styles.listItemTitle}>GMD desde a última pesagem: {gmdPrevisto.toFixed(3)} kg/dia</div>
+        <div style={{ ...styles.rowCard, marginTop: 10, borderColor: "#BBD8CC", background: "#F3FAF6" }}>
+          <Scale size={18} color="#1F4D45" />
+          <div>
+            <div style={styles.tableCellSub}>GMD calculado antes de salvar</div>
+            <div style={{ ...styles.listItemTitle, color: "#1F4D45" }}>{gmdPrevisto.toFixed(3)} kg/dia</div>
+          </div>
         </div>
       )}
 

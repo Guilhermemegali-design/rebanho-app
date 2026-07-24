@@ -56,7 +56,9 @@ function diasRestantesCarencia(p) {
 }
 
 function FormProcedimento({ dados, onSalvo, onCancelar }) {
+  const [alcance, setAlcance] = useState("animal");
   const [animalId, setAnimalId] = useState("");
+  const [loteId, setLoteId] = useState("");
   const [tipo, setTipo] = useState("vacina");
   const [medicamentoId, setMedicamentoId] = useState("");
   const [dose, setDose] = useState("");
@@ -77,7 +79,7 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
     },
     [dados.animais]
   );
-  const { lendo } = useRfidScanner(aoLerTag);
+  const { lendo } = useRfidScanner(aoLerTag, { ativo: alcance === "animal" });
 
   function handleEscolherMedicamento(id) {
     if (id === "__novo__") {
@@ -91,7 +93,10 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
   }
 
   async function handleSalvar() {
-    if (!animalId) { setErro("Escolha o animal (ou aponte o bastão RFID)."); return; }
+    if (alcance === "animal" && !animalId) { setErro("Escolha o animal (ou aponte o bastão RFID)."); return; }
+    const animaisDoLote = dados.animais.filter((animal) => animal.lote_atual_id === loteId && animal.situacao === "ativo");
+    if (alcance === "lote" && !loteId) { setErro("Escolha o lote."); return; }
+    if (alcance === "lote" && animaisDoLote.length === 0) { setErro("Este lote não possui animais ativos."); return; }
     setErro("");
     setSalvando(true);
     try {
@@ -100,7 +105,7 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
         const criado = await dados.criarMedicamento({ nome: nomeNovoMedicamento.trim(), tipo, carencia_padrao_dias: Number(carenciaDias) || 0 });
         medId = criado.id;
       }
-      await dados.registrarProcedimento(animalId, {
+      const procedimento = {
         tipo,
         medicamento_id: medId || null,
         dose: dose || null,
@@ -108,7 +113,12 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
         proxima_aplicacao: proximaAplicacao || null,
         carencia_dias: Number(carenciaDias) || 0,
         observacoes: observacoes || null,
-      });
+      };
+      if (alcance === "lote") {
+        await dados.registrarProcedimentosEmLote(animaisDoLote.map((animal) => animal.id), procedimento);
+      } else {
+        await dados.registrarProcedimento(animalId, procedimento);
+      }
       onSalvo();
     } catch (err) {
       setErro(err.message);
@@ -121,20 +131,43 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
     <div>
       <BackHeader title="Registrar procedimento" onBack={onCancelar} />
 
-      <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
-        <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
-        <div style={{ ...styles.scanBoxText, color: lendo ? "#fff" : "#1F4D45" }}>
-          {lendo ? "Lendo..." : "Aponte o bastão RFID para identificar o animal"}
-        </div>
+      <div style={styles.viewToggle}>
+        <button type="button" onClick={() => setAlcance("animal")} style={alcance === "animal" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Um animal</button>
+        <button type="button" onClick={() => setAlcance("lote")} style={alcance === "lote" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Lote inteiro</button>
       </div>
 
+      {alcance === "animal" && (
+        <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
+          <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
+          <div style={{ ...styles.scanBoxText, color: lendo ? "#fff" : "#1F4D45" }}>
+            {lendo ? "Lendo..." : "Aponte o bastão RFID para identificar o animal"}
+          </div>
+        </div>
+      )}
+
       <div style={styles.card}>
-        <SelectField
-          label="Animal"
-          value={animalId}
-          onChange={setAnimalId}
-          options={[{ value: "", label: "Selecione..." }, ...dados.animais.map((a) => ({ value: a.id, label: a.brinco_atual }))]}
-        />
+        {alcance === "animal" ? (
+          <SelectField
+            label="Animal"
+            value={animalId}
+            onChange={setAnimalId}
+            options={[{ value: "", label: "Selecione..." }, ...dados.animais.map((a) => ({ value: a.id, label: a.brinco_atual }))]}
+          />
+        ) : (
+          <>
+            <SelectField
+              label="Lote"
+              value={loteId}
+              onChange={setLoteId}
+              options={[{ value: "", label: "Selecione..." }, ...dados.lotes.map((lote) => ({ value: lote.id, label: lote.nome }))]}
+            />
+            {loteId && (
+              <div style={styles.hardwareHint}>
+                O manejo será lançado individualmente para {dados.animais.filter((animal) => animal.lote_atual_id === loteId && animal.situacao === "ativo").length} animal(is) ativo(s).
+              </div>
+            )}
+          </>
+        )}
         <SelectField label="Tipo" value={tipo} onChange={setTipo} options={Object.entries(TIPOS).map(([value, label]) => ({ value, label }))} />
 
         {!novoMedicamento ? (
@@ -161,7 +194,9 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
       <div style={styles.offlineNotice}>Sem sinal no curral? Sem problema — fica salvo no aparelho e envia sozinho quando a internet voltar.</div>
-      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Registrar"}</PrimaryButton>
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>
+        {salvando ? "Salvando..." : alcance === "lote" ? "Registrar para o lote inteiro" : "Registrar"}
+      </PrimaryButton>
     </div>
   );
 }
