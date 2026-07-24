@@ -180,7 +180,7 @@ function ResolveAcessoOperador({ sessao }) {
   const carregarVinculos = useCallback(async () => {
     const { data } = await supabase
       .from("clientes_usuarios")
-      .select("cliente_id, clientes(id, nome)")
+      .select("cliente_id, clientes(id, nome, consultor_id)")
       .eq("auth_user_id", sessao.user.id);
     setVinculos(data || []);
   }, [sessao.user.id]);
@@ -193,12 +193,12 @@ function ResolveAcessoOperador({ sessao }) {
   if (vinculos.length === 0) return <TelaVincularConvite onVinculado={carregarVinculos} />;
 
   if (fazendaEscolhida) {
-    return <AppPrincipal consultorId={sessao.user.id} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} />;
+    return <AppPrincipal consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} />;
   }
 
   if (vinculos.length === 1) {
     const c = vinculos[0].clientes;
-    return <AppPrincipal consultorId={sessao.user.id} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} />;
+    return <AppPrincipal consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} />;
   }
 
   return (

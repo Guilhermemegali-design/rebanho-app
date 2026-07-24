@@ -138,6 +138,10 @@ operador aos animais da própria fazenda.
   rendimento de carcaça são informados uma vez e aplicados ao grupo.
 - Mesmo numa venda em grupo, o app grava uma movimentação individual por
   animal e mantém o fluxo offline-first.
+- O operador recebe o `consultor_id` da fazenda pelo relacionamento
+  `clientes_usuarios → clientes`; nunca usa o próprio `auth.uid()` como
+  dono dos registros. Isso garante que o consultor enxergue imediatamente
+  os cadastros feitos pelo cliente após atualizar os dados.
 
 ## RLS (permissões)
 
