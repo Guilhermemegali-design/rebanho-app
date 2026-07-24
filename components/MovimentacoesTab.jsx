@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
-import { formatDataBR } from "@/lib/format";
+import { formatDataBR, formatKg, formatBRL } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { Radio, ArrowLeftRight } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
@@ -39,7 +39,12 @@ export default function MovimentacoesTab({ dados }) {
             <div style={styles.avatar}><ArrowLeftRight size={16} /></div>
             <div style={{ flex: 1 }}>
               <div style={styles.listItemTitle}>{animal ? animal.brinco_atual : "—"} · {TIPOS[m.tipo] || m.tipo}</div>
-              <div style={styles.listItemSub}>{formatDataBR(m.data)}{m.observacoes ? ` · ${m.observacoes}` : ""}{!m.id ? " · aguardando sincronizar" : ""}</div>
+              <div style={styles.listItemSub}>
+                {formatDataBR(m.data)}
+                {m.tipo === "venda" ? ` · ${formatKg(m.peso_saida)} · ${formatBRL(m.preco_arroba)}/@ · ${m.rendimento_carcaca ?? "—"}% carcaça` : ""}
+                {m.observacoes ? ` · ${m.observacoes}` : ""}
+                {!m.id ? " · aguardando sincronizar" : ""}
+              </div>
             </div>
           </div>
         );
@@ -50,41 +55,67 @@ export default function MovimentacoesTab({ dados }) {
 
 function FormMovimentacao({ dados, onSalvo, onCancelar }) {
   const [animalId, setAnimalId] = useState("");
+  const [animaisVenda, setAnimaisVenda] = useState([]);
+  const [pesosSaida, setPesosSaida] = useState({});
   const [tipo, setTipo] = useState("transferencia_lote");
   const [loteDestinoId, setLoteDestinoId] = useState("");
   const [localDestinoId, setLocalDestinoId] = useState("");
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
   const [observacoes, setObservacoes] = useState("");
+  const [precoArroba, setPrecoArroba] = useState("");
+  const [rendimentoCarcaca, setRendimentoCarcaca] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
   const aoLerTag = useCallback(
     (tag) => {
       const animal = encontrarAnimalPorTag(dados.animais, tag);
-      if (animal) setAnimalId(animal.id);
+      if (animal && tipo === "venda") {
+        setAnimaisVenda((atuais) => (atuais.includes(animal.id) ? atuais : [...atuais, animal.id]));
+      } else if (animal) setAnimalId(animal.id);
       else setErro(`Nenhum animal encontrado com o brinco "${tag}".`);
     },
-    [dados.animais]
+    [dados.animais, tipo]
   );
   const { lendo } = useRfidScanner(aoLerTag);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
 
   async function handleSalvar() {
-    if (!animalId) { setErro("Escolha o animal (ou aponte o bastão RFID)."); return; }
+    const idsSelecionados = tipo === "venda" ? animaisVenda : [animalId].filter(Boolean);
+    if (idsSelecionados.length === 0) { setErro(tipo === "venda" ? "Selecione ao menos um animal para a venda." : "Escolha o animal (ou aponte o bastão RFID)."); return; }
+    if (tipo === "venda") {
+      if (!precoArroba || Number(precoArroba) < 0) { setErro("Informe o preço da arroba."); return; }
+      if (!rendimentoCarcaca || Number(rendimentoCarcaca) <= 0 || Number(rendimentoCarcaca) > 100) { setErro("Informe um rendimento de carcaça entre 0 e 100%."); return; }
+      const semPeso = idsSelecionados.find((id) => !pesosSaida[id] || Number(pesosSaida[id]) <= 0);
+      if (semPeso) { setErro("Informe o peso de saída de todos os animais selecionados."); return; }
+    }
     setErro("");
     setSalvando(true);
     try {
-      const payload = { tipo, data, observacoes: observacoes || null };
-      if (tipo === "transferencia_lote" || tipo === "entrada") {
-        payload.lote_destino_id = loteDestinoId || null;
-        payload.lote_origem_id = animalEscolhido?.lote_atual_id || null;
+      const registros = idsSelecionados.map((id) => {
+        const animal = dados.animais.find((a) => a.id === id);
+        const payload = { tipo, data, observacoes: observacoes || null };
+        if (tipo === "transferencia_lote" || tipo === "entrada") {
+          payload.lote_destino_id = loteDestinoId || null;
+          payload.lote_origem_id = animal?.lote_atual_id || null;
+        }
+        if (tipo === "transferencia_local" || tipo === "entrada") {
+          payload.local_destino_id = localDestinoId || null;
+          payload.local_origem_id = animal?.local_atual_id || null;
+        }
+        if (tipo === "venda") {
+          payload.peso_saida = Number(pesosSaida[id]);
+          payload.preco_arroba = Number(precoArroba);
+          payload.rendimento_carcaca = Number(rendimentoCarcaca);
+        }
+        return { animalId: id, dados: payload };
+      });
+      if (tipo === "venda" && dados.registrarMovimentacoesEmLote) {
+        await dados.registrarMovimentacoesEmLote(registros);
+      } else {
+        await Promise.all(registros.map((registro) => dados.registrarMovimentacao(registro.animalId, registro.dados)));
       }
-      if (tipo === "transferencia_local" || tipo === "entrada") {
-        payload.local_destino_id = localDestinoId || null;
-        payload.local_origem_id = animalEscolhido?.local_atual_id || null;
-      }
-      await dados.registrarMovimentacao(animalId, payload);
       onSalvo();
     } catch (err) {
       setErro(err.message);
@@ -105,13 +136,53 @@ function FormMovimentacao({ dados, onSalvo, onCancelar }) {
       </div>
 
       <div style={styles.card}>
-        <SelectField
-          label="Animal"
-          value={animalId}
-          onChange={setAnimalId}
-          options={[{ value: "", label: "Selecione..." }, ...dados.animais.map((a) => ({ value: a.id, label: a.brinco_atual }))]}
-        />
         <SelectField label="Tipo" value={tipo} onChange={setTipo} options={Object.entries(TIPOS).map(([value, label]) => ({ value, label }))} />
+        {tipo !== "venda" && (
+          <SelectField
+            label="Animal"
+            value={animalId}
+            onChange={setAnimalId}
+            options={[{ value: "", label: "Selecione..." }, ...dados.animais.filter((a) => a.situacao === "ativo").map((a) => ({ value: a.id, label: a.brinco_atual }))]}
+          />
+        )}
+
+        {tipo === "venda" && (
+          <>
+            <SectionTitle>Animais da venda</SectionTitle>
+            <div style={styles.hardwareHint}>Marque vários animais ou leia os brincos RFID em sequência. O preço e o rendimento serão aplicados a todos; o peso é informado por animal.</div>
+            {dados.animais.filter((a) => a.situacao === "ativo").map((animal) => {
+              const selecionado = animaisVenda.includes(animal.id);
+              return (
+                <div key={animal.id} style={{ ...styles.rowCard, alignItems: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={selecionado}
+                    onChange={() => setAnimaisVenda((atuais) => selecionado ? atuais.filter((id) => id !== animal.id) : [...atuais, animal.id])}
+                    aria-label={`Selecionar ${animal.brinco_atual}`}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
+                    <div style={styles.listItemSub}>{animal.raca || "Raça não informada"}</div>
+                  </div>
+                  {selecionado && (
+                    <input
+                      type="number"
+                      min="1"
+                      inputMode="decimal"
+                      value={pesosSaida[animal.id] || ""}
+                      onChange={(e) => setPesosSaida((atuais) => ({ ...atuais, [animal.id]: e.target.value }))}
+                      placeholder="Peso kg"
+                      aria-label={`Peso de saída de ${animal.brinco_atual}`}
+                      style={{ ...styles.input, width: 110 }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+            <InputField label="Preço da arroba (R$)" type="number" value={precoArroba} onChange={setPrecoArroba} placeholder="0,00" />
+            <InputField label="Rendimento de carcaça (%)" type="number" value={rendimentoCarcaca} onChange={setRendimentoCarcaca} placeholder="Ex: 54" />
+          </>
+        )}
 
         {(tipo === "transferencia_lote" || tipo === "entrada") && (
           <SelectField

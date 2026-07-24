@@ -208,6 +208,9 @@ create table rebanho_movimentacoes (
   lote_destino_id uuid references rebanho_lotes(id) on delete set null,
   local_origem_id uuid references rebanho_locais(id) on delete set null,
   local_destino_id uuid references rebanho_locais(id) on delete set null,
+  peso_saida numeric,
+  preco_arroba numeric,
+  rendimento_carcaca numeric,
   data date not null default current_date,
   observacoes text,
   criado_em timestamptz default now()

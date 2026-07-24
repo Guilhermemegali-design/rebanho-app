@@ -120,6 +120,18 @@ salvar, o formulário **fica na tela** com raça/lote preenchidos (só
 quantidade e peso limpam), porque normalmente esses dois campos se repetem
 entre grupos do mesmo dia (ex: dois caminhões, pesos diferentes).
 
+## Fluxo de cadastro e venda no curral
+
+- No cadastro individual, a raça é escolhida entre Nelore, Nelorado,
+  F1 Angus, Cruzado, Guzera e Guzeratado.
+- O seletor de lote contém a opção `+ Criar novo lote`, permitindo criar
+  e já vincular o lote sem sair da tela do animal.
+- Em Movimentações → Venda é possível selecionar ou ler por RFID vários
+  animais em sequência. O peso de saída é individual; preço da arroba e
+  rendimento de carcaça são informados uma vez e aplicados ao grupo.
+- Mesmo numa venda em grupo, o app grava uma movimentação individual por
+  animal e mantém o fluxo offline-first.
+
 ## RLS (permissões)
 
 Mesmo padrão dos outros dois apps: `auth.uid() = consultor_id` pro

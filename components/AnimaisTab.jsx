@@ -11,6 +11,7 @@ import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, Text
 
 const SITUACOES = { ativo: "Ativo", vendido: "Vendido", morto: "Morto", transferido: "Transferido" };
 const STATUS_BADGE_STYLE = { ativo: styles.statusBadgeAtivo, atencao: styles.statusBadgeAtencao, carencia: styles.statusBadgeCarencia, neutro: styles.tagOrange };
+const RACAS = ["Nelore", "Nelorado", "F1 Angus", "Cruzado", "Guzera", "Guzeratado"];
 
 export default function AnimaisTab({ dados }) {
   const [busca, setBusca] = useState("");
@@ -247,6 +248,8 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
   const [observacoes, setObservacoes] = useState(inicial?.observacoes || "");
   const [novoFornecedor, setNovoFornecedor] = useState(false);
   const [nomeNovoFornecedor, setNomeNovoFornecedor] = useState("");
+  const [novoLote, setNovoLote] = useState(false);
+  const [nomeNovoLote, setNomeNovoLote] = useState("");
   const [notaFiscalFile, setNotaFiscalFile] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
@@ -281,6 +284,13 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
         fornecedorIdFinal = criado.id;
       }
 
+      let loteIdFinal = loteId;
+      if (novoLote) {
+        if (!nomeNovoLote.trim()) throw new Error("Informe o nome do novo lote.");
+        const criado = await dados.criarLote({ nome: nomeNovoLote.trim(), situacao: "ativo" });
+        loteIdFinal = criado.id;
+      }
+
       let notaFiscalUrl = inicial?.nota_fiscal_url || null;
       if (notaFiscalFile) {
         notaFiscalUrl = await enviarDocumentoRebanho(notaFiscalFile);
@@ -288,7 +298,7 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
 
       const valorPorArroba = calcularValorPorArroba(pesoEntrada, precoArroba);
       const valorFinal = modoValor === "arroba" ? valorPorArroba : (valorEntrada === "" ? null : Number(valorEntrada));
-      const loteEscolhido = dados.lotes.find((l) => l.id === loteId);
+      const loteEscolhido = dados.lotes.find((l) => l.id === loteIdFinal);
 
       await onSalvar({
         brinco_atual: brincoFinal,
@@ -303,7 +313,7 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
         valor_entrada: valorFinal,
         observacoes: observacoes || null,
         nota_fiscal_url: notaFiscalUrl,
-        lote_atual_id: loteId || null,
+        lote_atual_id: loteIdFinal || null,
         local_atual_id: loteEscolhido?.local_id || null,
       });
     } catch (err) {
@@ -328,7 +338,12 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
         <InputField label="Brinco visual" value={brinco} onChange={setBrinco} placeholder="Número do brinco (se a fazenda usa)" />
         <InputField label="Brinco RFID (eletrônico)" value={brincoRfid} onChange={setBrincoRfid} placeholder="Lido pelo bastão, ou digite" />
         <SelectField label="Sexo" value={sexo} onChange={setSexo} options={[{ value: "femea", label: "Fêmea" }, { value: "macho", label: "Macho" }]} />
-        <InputField label="Raça" value={raca} onChange={setRaca} placeholder="Ex: Nelore" />
+        <SelectField
+          label="Raça"
+          value={raca}
+          onChange={setRaca}
+          options={[{ value: "", label: "Selecione..." }, ...RACAS.map((nome) => ({ value: nome, label: nome }))]}
+        />
         <InputField label="Categoria" value={categoria} onChange={setCategoria} placeholder="Ex: Bezerro, Novilha, Boi" />
         <InputField label="Origem" value={origem} onChange={setOrigem} placeholder="De onde veio o animal" />
 
@@ -347,12 +362,32 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
           <InputField label="Nome do novo fornecedor" value={nomeNovoFornecedor} onChange={setNomeNovoFornecedor} placeholder="Ex: Fazenda São José" />
         )}
 
-        <SelectField
-          label="Lote"
-          value={loteId}
-          onChange={setLoteId}
-          options={[{ value: "", label: "Sem lote definido" }, ...dados.lotes.map((l) => ({ value: l.id, label: l.nome }))]}
-        />
+        {!novoLote ? (
+          <SelectField
+            label="Lote"
+            value={loteId}
+            onChange={(id) => {
+              if (id === "__novo__") {
+                setNovoLote(true);
+                setLoteId("");
+              } else {
+                setLoteId(id);
+              }
+            }}
+            options={[
+              { value: "", label: "Sem lote definido" },
+              ...dados.lotes.map((l) => ({ value: l.id, label: l.nome })),
+              { value: "__novo__", label: "+ Criar novo lote" },
+            ]}
+          />
+        ) : (
+          <div>
+            <InputField label="Nome do novo lote" value={nomeNovoLote} onChange={setNomeNovoLote} placeholder="Ex: Recria Águas 04" />
+            <button type="button" onClick={() => { setNovoLote(false); setNomeNovoLote(""); }} style={{ ...styles.linkBtn, textAlign: "left" }}>
+              Usar um lote já cadastrado
+            </button>
+          </div>
+        )}
         <InputField label="Data de entrada" type="date" value={dataEntrada} onChange={setDataEntrada} />
         <InputField label="Peso de entrada (kg)" type="number" value={pesoEntrada} onChange={setPesoEntrada} placeholder="0" />
 
@@ -486,7 +521,12 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
       <div style={styles.card}>
         <InputField label="Quantidade de animais" type="number" value={quantidade} onChange={setQuantidade} placeholder="Ex: 20" />
         <InputField label="Peso de entrada (kg) — aplicado a todos" type="number" value={peso} onChange={setPeso} placeholder="0" />
-        <InputField label="Raça" value={raca} onChange={setRaca} placeholder="Ex: Nelore" />
+        <SelectField
+          label="Raça"
+          value={raca}
+          onChange={setRaca}
+          options={[{ value: "", label: "Selecione..." }, ...RACAS.map((nome) => ({ value: nome, label: nome }))]}
+        />
         <SelectField
           label="Lote"
           value={loteId}
@@ -524,7 +564,10 @@ function FichaAnimal({ dados, animal, onVoltar }) {
       itens.push({ data: p.data, tipo: "pesagem", icone: Scale, titulo: `Pesagem: ${formatKg(p.peso)}`, sub: p.origem_peso === "bluetooth" ? "Via balança Bluetooth" : "Digitado manualmente" });
     }
     for (const m of dados.movimentacoes.filter((x) => x.animal_id === animal.id)) {
-      itens.push({ data: m.data, tipo: "movimentacao", icone: ArrowLeftRight, titulo: rotuloMovimentacao(m), sub: m.observacoes || "" });
+      const dadosVenda = m.tipo === "venda"
+        ? [`Peso: ${formatKg(m.peso_saida)}`, `Arroba: ${formatBRL(m.preco_arroba)}`, `Rendimento: ${m.rendimento_carcaca ?? "—"}%`].join(" · ")
+        : "";
+      itens.push({ data: m.data, tipo: "movimentacao", icone: ArrowLeftRight, titulo: rotuloMovimentacao(m), sub: [dadosVenda, m.observacoes].filter(Boolean).join(" · ") });
     }
     for (const p of dados.procedimentos.filter((x) => x.animal_id === animal.id)) {
       itens.push({ data: p.data_aplicacao, tipo: "sanidade", icone: Syringe, titulo: rotuloProcedimento(p, dados.medicamentos), sub: p.observacoes || "" });
