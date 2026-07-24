@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
-import { formatDataBR, formatKg, formatBRL, calcularGmd } from "@/lib/format";
+import { formatDataBR, formatKg, formatBRL, calcularGmd, calcularValorPorArroba } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { statusAnimal } from "@/lib/alerts";
 import { enviarDocumentoRebanho } from "@/lib/storage";
@@ -56,7 +56,19 @@ export default function AnimaisTab({ dados }) {
       <FormAnimal
         dados={dados}
         onSalvar={async (payload) => {
-          await dados.criarAnimal(payload);
+          const criado = await dados.criarAnimal(payload);
+          // Se já entrou direto num lote, registra a movimentação de
+          // entrada — assim a ficha do animal mostra isso na linha do
+          // tempo, igual a qualquer outra transferência.
+          if (payload.lote_atual_id) {
+            await dados.registrarMovimentacao(criado.id, {
+              tipo: "entrada",
+              lote_destino_id: payload.lote_atual_id,
+              local_destino_id: payload.local_atual_id || null,
+              data: payload.data_entrada,
+              observacoes: "Entrada no cadastro do animal",
+            });
+          }
           setModo("lista");
         }}
         onCancelar={() => setModo("lista")}
@@ -197,10 +209,13 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
   const [raca, setRaca] = useState(inicial?.raca || "");
   const [origem, setOrigem] = useState(inicial?.origem || "");
   const [fornecedorId, setFornecedorId] = useState(inicial?.fornecedor_id || "");
+  const [loteId, setLoteId] = useState(inicial?.lote_atual_id || "");
   const [categoria, setCategoria] = useState(inicial?.categoria || "");
   const [dataEntrada, setDataEntrada] = useState(inicial?.data_entrada || new Date().toISOString().slice(0, 10));
   const [pesoEntrada, setPesoEntrada] = useState(inicial?.peso_entrada ?? "");
+  const [modoValor, setModoValor] = useState("total"); // total | arroba
   const [valorEntrada, setValorEntrada] = useState(inicial?.valor_entrada ?? "");
+  const [precoArroba, setPrecoArroba] = useState("");
   const [observacoes, setObservacoes] = useState(inicial?.observacoes || "");
   const [novoFornecedor, setNovoFornecedor] = useState(false);
   const [nomeNovoFornecedor, setNomeNovoFornecedor] = useState("");
@@ -243,6 +258,10 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
         notaFiscalUrl = await enviarDocumentoRebanho(notaFiscalFile);
       }
 
+      const valorPorArroba = calcularValorPorArroba(pesoEntrada, precoArroba);
+      const valorFinal = modoValor === "arroba" ? valorPorArroba : (valorEntrada === "" ? null : Number(valorEntrada));
+      const loteEscolhido = dados.lotes.find((l) => l.id === loteId);
+
       await onSalvar({
         brinco_atual: brincoFinal,
         brinco_rfid: brincoRfid.trim() || null,
@@ -253,9 +272,11 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
         categoria: categoria || null,
         data_entrada: dataEntrada,
         peso_entrada: pesoEntrada === "" ? null : Number(pesoEntrada),
-        valor_entrada: valorEntrada === "" ? null : Number(valorEntrada),
+        valor_entrada: valorFinal,
         observacoes: observacoes || null,
         nota_fiscal_url: notaFiscalUrl,
+        lote_atual_id: loteId || null,
+        local_atual_id: loteEscolhido?.local_id || null,
       });
     } catch (err) {
       setErro(err.message);
@@ -298,9 +319,33 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
           <InputField label="Nome do novo fornecedor" value={nomeNovoFornecedor} onChange={setNomeNovoFornecedor} placeholder="Ex: Fazenda São José" />
         )}
 
+        <SelectField
+          label="Lote"
+          value={loteId}
+          onChange={setLoteId}
+          options={[{ value: "", label: "Sem lote definido" }, ...dados.lotes.map((l) => ({ value: l.id, label: l.nome }))]}
+        />
         <InputField label="Data de entrada" type="date" value={dataEntrada} onChange={setDataEntrada} />
         <InputField label="Peso de entrada (kg)" type="number" value={pesoEntrada} onChange={setPesoEntrada} placeholder="0" />
-        <InputField label="Valor de entrada (R$)" type="number" value={valorEntrada} onChange={setValorEntrada} placeholder="0,00" />
+
+        <div style={styles.viewToggle}>
+          <button onClick={() => setModoValor("total")} style={modoValor === "total" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Valor total</button>
+          <button onClick={() => setModoValor("arroba")} style={modoValor === "arroba" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Preço da arroba</button>
+        </div>
+
+        {modoValor === "total" ? (
+          <InputField label="Valor de entrada (R$)" type="number" value={valorEntrada} onChange={setValorEntrada} placeholder="0,00" />
+        ) : (
+          <>
+            <InputField label="Preço da arroba (R$)" type="number" value={precoArroba} onChange={setPrecoArroba} placeholder="0,00" />
+            <div style={styles.hardwareHint}>
+              {pesoEntrada === "" || precoArroba === ""
+                ? "Informe o peso de entrada e o preço da arroba (considerando arroba de 30 kg) para calcular o valor."
+                : `Valor calculado: ${formatBRL(calcularValorPorArroba(pesoEntrada, precoArroba))} (${(Number(pesoEntrada) / 30).toFixed(2)} arrobas de 30 kg)`}
+            </div>
+          </>
+        )}
+
         <TextAreaField label="Observações" value={observacoes} onChange={setObservacoes} placeholder="Opcional" />
 
         <label style={styles.field}>
