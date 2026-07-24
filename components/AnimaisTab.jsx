@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL, calcularGmd, calcularValorPorArroba } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
@@ -72,6 +72,7 @@ export default function AnimaisTab({ dados }) {
           }
           setModo("lista");
         }}
+        onVarios={() => setModo("lote")}
         onCancelar={() => setModo("lista")}
       />
     );
@@ -81,21 +82,20 @@ export default function AnimaisTab({ dados }) {
     return (
       <FormAnimaisEmLote
         dados={dados}
-        onSalvar={async (registros, loteId, local_atual_id) => {
-          const criados = await dados.criarAnimaisEmLote(registros);
-          if (loteId) {
-            for (const criado of criados) {
-              await dados.registrarMovimentacao(criado.id, {
-                tipo: "entrada",
-                lote_destino_id: loteId,
-                local_destino_id: local_atual_id || null,
-                data: criado.data_entrada,
-                observacoes: "Entrada em lote (cadastro múltiplo)",
-              });
-            }
+        onSalvar={async (payload) => {
+          const criado = await dados.criarAnimal(payload);
+          if (payload.lote_atual_id) {
+            await dados.registrarMovimentacao(criado.id, {
+              tipo: "entrada",
+              lote_destino_id: payload.lote_atual_id,
+              local_destino_id: payload.local_atual_id || null,
+              data: payload.data_entrada,
+              observacoes: "Entrada contínua de animais",
+            });
           }
-          return criados;
+          return criado;
         }}
+        onAtualizar={dados.atualizarAnimal}
         onCancelar={() => setModo("lista")}
       />
     );
@@ -231,7 +231,7 @@ function infoPesoAnimal(animal, pesagens) {
 }
 
 // ---------- Formulário de cadastro (com captura RFID) ----------
-function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
+function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
   const [brinco, setBrinco] = useState(inicial?.brinco_atual || "");
   const [brincoRfid, setBrincoRfid] = useState(inicial?.brinco_rfid || "");
   const [sexo, setSexo] = useState(inicial?.sexo || "femea");
@@ -326,6 +326,11 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
   return (
     <div>
       <BackHeader title={inicial ? "Editar animal" : "Novo animal"} onBack={onCancelar} />
+      {!inicial && onVarios && (
+        <button type="button" onClick={onVarios} style={{ ...styles.secondaryBtn, marginTop: 0, marginBottom: 12 }}>
+          Cadastrar vários animais
+        </button>
+      )}
 
       <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
         <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
@@ -428,69 +433,50 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
   );
 }
 
-// ---------- Cadastro em lote (vários animais de uma vez, ex: caminhão
-// chegando no curral, ainda sem brinco individual definido) ----------
-function gerarPrefixoLote(loteNome) {
-  if (!loteNome) return "ENTRADA";
-  const limpo = loteNome
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toUpperCase()
-    .slice(0, 12);
-  return limpo || "ENTRADA";
-}
-
-function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
-  const [quantidade, setQuantidade] = useState("");
+// ---------- Cadastro contínuo no curral: cada animal mantém brinco e
+// peso próprios, enquanto os dados do grupo permanecem preenchidos. ----------
+function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onCancelar }) {
+  const [brinco, setBrinco] = useState("");
   const [peso, setPeso] = useState("");
   const [raca, setRaca] = useState("");
   const [loteId, setLoteId] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [ultimoResultado, setUltimoResultado] = useState(null);
+  const [recentes, setRecentes] = useState([]);
+  const [editandoId, setEditandoId] = useState(null);
+  const brincoRef = useRef(null);
 
   const hoje = new Date().toISOString().slice(0, 10);
   const loteEscolhido = dados.lotes.find((l) => l.id === loteId);
 
   async function handleSalvar() {
-    const qtd = Number(quantidade);
-    if (!qtd || qtd < 1) {
-      setErro("Informe quantos animais entraram.");
-      return;
-    }
-    if (qtd > 500) {
-      setErro("No máximo 500 animais por vez — divida em mais de uma entrada.");
-      return;
-    }
+    if (!brinco.trim()) { setErro("Informe o brinco do animal."); return; }
+    if (!peso || Number(peso) <= 0) { setErro("Informe o peso individual do animal."); return; }
     setErro("");
     setSalvando(true);
     try {
-      const prefixo = gerarPrefixoLote(loteEscolhido?.nome);
-      const dataCompacta = hoje.slice(2).replace(/-/g, "");
-      const prefixoCompleto = `${prefixo}-${dataCompacta}-`;
-      // Continua a numeração de onde parou, caso já tenha cadastrado
-      // outro grupo com o mesmo lote/data antes (não reaproveita número).
-      const proximoNumero = 1 + dados.animais.reduce((max, a) => {
-        if (!a.brinco_atual.startsWith(prefixoCompleto)) return max;
-        const n = Number(a.brinco_atual.slice(prefixoCompleto.length));
-        return Number.isFinite(n) && n > max ? n : max;
-      }, 0);
-
-      const registros = Array.from({ length: qtd }, (_, i) => ({
-        brinco_atual: `${prefixoCompleto}${String(proximoNumero + i).padStart(2, "0")}`,
+      const payload = {
+        brinco_atual: brinco.trim(),
         raca: raca || null,
-        peso_entrada: peso === "" ? null : Number(peso),
+        peso_entrada: Number(peso),
         data_entrada: hoje,
         lote_atual_id: loteId || null,
         local_atual_id: loteEscolhido?.local_id || null,
-      }));
-      const criados = await onSalvar(registros, loteId || null, loteEscolhido?.local_id || null);
-      setUltimoResultado({ primeiro: registros[0].brinco_atual, ultimo: registros[registros.length - 1].brinco_atual, total: criados.length });
-      // Mantém a tela preenchida (lote e raça costumam se repetir no
-      // mesmo dia) — só quantidade e peso somem, prontos pro próximo grupo.
-      setQuantidade("");
+      };
+      if (editandoId) {
+        const atualizado = await onAtualizar(editandoId, {
+          brinco_atual: payload.brinco_atual,
+          peso_entrada: payload.peso_entrada,
+        });
+        setRecentes((atuais) => atuais.map((animal) => animal.id === editandoId ? atualizado : animal));
+        setEditandoId(null);
+      } else {
+        const criado = await onSalvar(payload);
+        setRecentes((atuais) => [criado, ...atuais]);
+      }
+      setBrinco("");
       setPeso("");
+      requestAnimationFrame(() => brincoRef.current?.focus());
     } catch (err) {
       setErro(err.message);
     } finally {
@@ -500,27 +486,14 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
 
   return (
     <div>
-      <BackHeader title="Entrada em lote" onBack={onCancelar} />
+      <BackHeader title="Cadastrar vários animais" onBack={onCancelar} />
       <div style={styles.hardwareHint}>
-        Use quando vários animais entram juntos no curral, ainda sem brinco individual. Cada um recebe uma identificação
-        temporária (ex: {gerarPrefixoLote(loteEscolhido?.nome)}-{hoje.slice(2).replace(/-/g, "")}-01) — edite depois com o brinco
-        real ou aponte o bastão RFID na ficha de cada animal.
+        Preencha os dados do grupo uma vez. Após salvar, raça e lote continuam preenchidos; somente brinco e peso ficam em branco para o próximo animal.
       </div>
 
-      {ultimoResultado && (
-        <div style={{ ...styles.alertaCard, background: "#E4EFE9", border: "1px solid #CDE3D9" }}>
-          <div>
-            <div style={{ ...styles.alertaTitulo, color: "#1F4D45" }}>{ultimoResultado.total} animal(is) cadastrado(s) com sucesso.</div>
-            <div style={styles.alertaSub}>
-              De {ultimoResultado.primeiro} até {ultimoResultado.ultimo}. Pode lançar outro grupo do mesmo dia abaixo, ou voltar para a lista.
-            </div>
-          </div>
-        </div>
-      )}
-
       <div style={styles.card}>
-        <InputField label="Quantidade de animais" type="number" value={quantidade} onChange={setQuantidade} placeholder="Ex: 20" />
-        <InputField label="Peso de entrada (kg) — aplicado a todos" type="number" value={peso} onChange={setPeso} placeholder="0" />
+        <InputField label="Brinco do animal" value={brinco} onChange={setBrinco} inputRef={brincoRef} placeholder="Ex: 1245" />
+        <InputField label="Peso individual (kg)" type="number" value={peso} onChange={setPeso} placeholder="0" />
         <SelectField
           label="Raça"
           value={raca}
@@ -537,8 +510,36 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
       </div>
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
-      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Cadastrando..." : "Cadastrar animais"}</PrimaryButton>
-      {ultimoResultado && <button onClick={onCancelar} style={styles.secondaryBtn}>Concluir e voltar para a lista</button>}
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>
+        {salvando ? "Salvando..." : editandoId ? "Salvar correção" : "Salvar e cadastrar próximo"}
+      </PrimaryButton>
+
+      {recentes.length > 0 && (
+        <>
+          <SectionTitle>Cadastrados nesta sequência</SectionTitle>
+          {recentes.map((animal) => (
+            <div key={animal.id} style={styles.rowCard}>
+              <div style={{ flex: 1 }}>
+                <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
+                <div style={styles.listItemSub}>{formatKg(animal.peso_entrada)} · {animal.raca || "Sem raça"}</div>
+              </div>
+              <button
+                type="button"
+                style={styles.editLinkBtn}
+                onClick={() => {
+                  setEditandoId(animal.id);
+                  setBrinco(animal.brinco_atual || "");
+                  setPeso(animal.peso_entrada ?? "");
+                  requestAnimationFrame(() => brincoRef.current?.focus());
+                }}
+              >
+                Editar
+              </button>
+            </div>
+          ))}
+          <button type="button" onClick={onCancelar} style={styles.secondaryBtn}>Concluir e voltar para a lista</button>
+        </>
+      )}
     </div>
   );
 }

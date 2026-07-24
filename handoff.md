@@ -105,20 +105,14 @@ Depois de ver uma referência visual do usuário, o app foi redesenhado de
 
 ## Cadastro em lote (`FormAnimaisEmLote` dentro de `AnimaisTab.jsx`)
 
-Pra quando vários animais entram juntos no curral sem brinco individual
-ainda. Usuário informa só quantidade, peso (aplicado a todos), raça e lote;
-data de entrada é sempre a de hoje. Cada animal recebe uma identificação
-temporária sequencial tipo `RAGUAS03-240724-01`, `-02`... (prefixo vem do
-nome do lote, sem acentos/espaços) — pra ser editada depois com o brinco
-real ou pela leitura RFID na ficha do animal.
+Fluxo contínuo para o curral, mas mantendo cada animal individual. O
+usuário informa brinco e peso próprios, além de raça e lote do grupo.
+Depois de salvar, o formulário permanece aberto com raça e lote
+preenchidos; somente brinco e peso são limpos e o foco volta para o brinco.
 
-**Importante**: a numeração sequencial **continua de onde parou**
-(consultando `dados.animais` por brincos já usados com o mesmo prefixo)
-em vez de reiniciar do 01 a cada grupo salvo — sem isso, dois grupos do
-mesmo lote no mesmo dia gerariam brincos temporários duplicados. Depois de
-salvar, o formulário **fica na tela** com raça/lote preenchidos (só
-quantidade e peso limpam), porque normalmente esses dois campos se repetem
-entre grupos do mesmo dia (ex: dois caminhões, pesos diferentes).
+Os animais cadastrados na sequência aparecem logo abaixo do formulário
+com botão **Editar**. A correção de brinco ou peso acontece na própria
+tela, sem voltar para a lista geral.
 
 ## Fluxo de cadastro e venda no curral
 
