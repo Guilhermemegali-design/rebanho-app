@@ -162,6 +162,9 @@ operador aos animais da própria fazenda.
 - O quadro de Sanidade permite excluir manejos individuais. Lançamentos
   coletivos recebem um identificador de grupo e podem ser apagados do lote
   inteiro com uma única confirmação.
+- O quadro de Movimentações permite excluir transferências de lote ou
+  local; ao apagar a transferência mais recente, o animal volta ao lote ou
+  local de origem.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 

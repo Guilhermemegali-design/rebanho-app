@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Radio, ArrowLeftRight } from "lucide-react";
+import { Radio, ArrowLeftRight, Trash2 } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = {
@@ -18,6 +18,20 @@ const TIPOS = {
 
 export default function MovimentacoesTab({ dados }) {
   const [modo, setModo] = useState("lista");
+  const [excluindoId, setExcluindoId] = useState(null);
+
+  async function excluirTransferencia(movimentacao, animal) {
+    if (!window.confirm(`Excluir a ${TIPOS[movimentacao.tipo].toLowerCase()} do animal ${animal?.brinco_atual || "selecionado"}, em ${formatDataBR(movimentacao.data)}?`)) return;
+    const chave = movimentacao.id || movimentacao.client_uuid;
+    setExcluindoId(chave);
+    try {
+      await dados.excluirMovimentacao(movimentacao);
+    } catch (err) {
+      window.alert(err.message || "Não foi possível excluir a transferência.");
+    } finally {
+      setExcluindoId(null);
+    }
+  }
 
   const recentes = useMemo(
     () => [...dados.movimentacoes].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 30),
@@ -46,6 +60,18 @@ export default function MovimentacoesTab({ dados }) {
                 {!m.id ? " · aguardando sincronizar" : ""}
               </div>
             </div>
+            {(m.tipo === "transferencia_lote" || m.tipo === "transferencia_local") && (
+              <button
+                type="button"
+                onClick={() => excluirTransferencia(m, animal)}
+                disabled={excluindoId === (m.id || m.client_uuid)}
+                aria-label={`Excluir ${TIPOS[m.tipo].toLowerCase()}`}
+                title="Excluir transferência"
+                style={{ ...styles.iconDangerBtn, opacity: excluindoId === (m.id || m.client_uuid) ? 0.5 : 1 }}
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
           </div>
         );
       })}
