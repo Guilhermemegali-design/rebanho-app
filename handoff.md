@@ -142,6 +142,9 @@ operador aos animais da própria fazenda.
   `clientes_usuarios → clientes`; nunca usa o próprio `auth.uid()` como
   dono dos registros. Isso garante que o consultor enxergue imediatamente
   os cadastros feitos pelo cliente após atualizar os dados.
+- A lista geral de animais oferece exclusão direta ao lado do status, sem
+  precisar abrir a ficha. A tela de lotes também permite excluir; os
+  animais vinculados são preservados e ficam sem lote.
 
 ## RLS (permissões)
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { styles } from "@/lib/styles";
-import { MapPin, Layers } from "lucide-react";
+import { MapPin, Layers, Trash2 } from "lucide-react";
 import { ListHeader, PageHeader, BackHeader, EmptyHint, InputField, SelectField, PrimaryButton } from "@/components/UI";
 
 const TIPOS_LOCAL = { pasto: "Pasto", curral: "Curral", baia: "Baia", outro: "Outro" };
@@ -90,9 +90,29 @@ function FormLocal({ onSalvar, onCancelar }) {
 }
 
 function ListaLotes({ dados, onNovo }) {
+  const [excluindoId, setExcluindoId] = useState(null);
+  const [erro, setErro] = useState("");
+
+  async function handleExcluir(lote, qtd) {
+    const detalhe = qtd > 0
+      ? ` Os ${qtd} animais deste lote continuarão cadastrados e ficarão sem lote.`
+      : "";
+    if (!window.confirm(`Excluir o lote "${lote.nome}"?${detalhe}`)) return;
+    setExcluindoId(lote.id);
+    setErro("");
+    try {
+      await dados.excluirLote(lote.id);
+    } catch (err) {
+      setErro(err.message || "Não foi possível excluir o lote.");
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
   return (
     <div>
       <ListHeader title="Lotes" actionLabel="Novo lote" onAction={onNovo} />
+      {erro && <div style={{ ...styles.errorBox, marginBottom: 10 }}>{erro}</div>}
       {dados.lotes.length === 0 && <EmptyHint text="Nenhum lote cadastrado ainda." />}
       {dados.lotes.map((l) => {
         const qtd = dados.animais.filter((a) => a.lote_atual_id === l.id && a.situacao === "ativo").length;
@@ -105,6 +125,16 @@ function ListaLotes({ dados, onNovo }) {
               <div style={styles.listItemSub}>{local ? local.nome : "Sem local"} · {l.situacao === "ativo" ? "Ativo" : "Encerrado"}</div>
             </div>
             <div style={{ fontWeight: 800, fontSize: 15 }}>{qtd}</div>
+            <button
+              type="button"
+              onClick={() => handleExcluir(l, qtd)}
+              disabled={excluindoId === l.id}
+              aria-label={`Excluir lote ${l.nome}`}
+              title="Excluir lote"
+              style={{ ...styles.iconDangerBtn, opacity: excluindoId === l.id ? 0.5 : 1 }}
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         );
       })}

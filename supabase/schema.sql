@@ -98,6 +98,13 @@ create policy "cliente_edita_lotes_rebanho" on rebanho_lotes
   for update using (cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
   with check (cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()));
 
+create policy "cliente_exclui_lotes_rebanho" on rebanho_lotes
+  for delete to authenticated
+  using (cliente_id in (
+    select cliente_id from clientes_usuarios
+    where auth_user_id = (select auth.uid())
+  ));
+
 create index idx_rebanho_lotes_cliente on rebanho_lotes(cliente_id);
 
 -- ------------------------------------------------------------

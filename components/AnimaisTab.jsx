@@ -6,7 +6,7 @@ import { formatDataBR, formatKg, formatBRL, calcularGmd, calcularValorPorArroba 
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { statusAnimal } from "@/lib/alerts";
 import { enviarDocumentoRebanho } from "@/lib/storage";
-import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, ArrowLeftRight, Syringe } from "lucide-react";
+import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, ArrowLeftRight, Syringe, Trash2 } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const SITUACOES = { ativo: "Ativo", vendido: "Vendido", morto: "Morto", transferido: "Transferido" };
@@ -20,6 +20,19 @@ export default function AnimaisTab({ dados }) {
   const [modo, setModo] = useState("lista"); // lista | novo | detalhe
   const [animalSelecionado, setAnimalSelecionado] = useState(null);
   const [avisoScan, setAvisoScan] = useState("");
+  const [excluindoId, setExcluindoId] = useState(null);
+
+  async function excluirDireto(animal) {
+    if (!window.confirm(`Excluir o animal ${animal.brinco_atual}? Pesagens, movimentações e sanidade também serão removidas.`)) return;
+    setExcluindoId(animal.id);
+    try {
+      await dados.excluirAnimal(animal.id);
+    } catch (err) {
+      window.alert(err.message || "Não foi possível excluir o animal.");
+    } finally {
+      setExcluindoId(null);
+    }
+  }
 
   const listaFiltrada = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -193,7 +206,22 @@ export default function AnimaisTab({ dados }) {
                       <td style={styles.tableTd}>
                         <span style={{ ...styles.statusBadge, ...STATUS_BADGE_STYLE[status.cor] }}>{status.rotulo}</span>
                       </td>
-                      <td style={{ ...styles.tableTd, textAlign: "right" }}><ChevronRight size={16} color="#C9C7BE" /></td>
+                      <td style={{ ...styles.tableTd, textAlign: "right", whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            excluirDireto(a);
+                          }}
+                          disabled={excluindoId === a.id}
+                          aria-label={`Excluir animal ${a.brinco_atual}`}
+                          title="Excluir animal"
+                          style={{ ...styles.iconDangerBtn, marginRight: 8, opacity: excluindoId === a.id ? 0.5 : 1 }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                        <ChevronRight size={16} color="#C9C7BE" />
+                      </td>
                     </tr>
                   );
                 })}
@@ -206,17 +234,33 @@ export default function AnimaisTab({ dados }) {
           {listaFiltrada.map((a) => {
             const status = statusAnimal(a, dados);
             return (
-              <button key={a.id} style={styles.listItem} onClick={() => { setAnimalSelecionado(a); setModo("detalhe"); }}>
-                <div style={styles.avatar}><TagIcon size={17} /></div>
-                <div style={{ flex: 1, textAlign: "left" }}>
-                  <div style={styles.listItemTitle}>{a.brinco_atual}</div>
-                  <div style={styles.listItemSub}>
-                    {[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}
-                    {a.brinco_rfid ? ` · RFID ${a.brinco_rfid}` : ""}
+              <div key={a.id} style={{ ...styles.listItem, display: "flex" }}>
+                <button
+                  type="button"
+                  style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, border: 0, background: "transparent", padding: 0 }}
+                  onClick={() => { setAnimalSelecionado(a); setModo("detalhe"); }}
+                >
+                  <div style={styles.avatar}><TagIcon size={17} /></div>
+                  <div style={{ flex: 1, textAlign: "left" }}>
+                    <div style={styles.listItemTitle}>{a.brinco_atual}</div>
+                    <div style={styles.listItemSub}>
+                      {[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}
+                      {a.brinco_rfid ? ` · RFID ${a.brinco_rfid}` : ""}
+                    </div>
                   </div>
-                </div>
+                </button>
                 <span style={{ ...styles.statusBadge, ...STATUS_BADGE_STYLE[status.cor] }}>{status.rotulo}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => excluirDireto(a)}
+                  disabled={excluindoId === a.id}
+                  aria-label={`Excluir animal ${a.brinco_atual}`}
+                  title="Excluir animal"
+                  style={{ ...styles.iconDangerBtn, marginLeft: 8, opacity: excluindoId === a.id ? 0.5 : 1 }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
             );
           })}
         </div>
