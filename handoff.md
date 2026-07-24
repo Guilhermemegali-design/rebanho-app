@@ -175,6 +175,10 @@ operador aos animais da própria fazenda.
   atualizar também instalações existentes sem novo cadastro.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
+- Configurações agora permite ao consultor/administrador cadastrar acessos
+  por e-mail, gerar um código individual, copiar/cancelar convites e alterar
+  ou remover usuários. Os papéis são administrador, operador (`editor`) e
+  somente leitura (`leitor`).
 
 ## RLS (permissões)
 
@@ -184,6 +188,11 @@ clientes_usuarios where auth_user_id = auth.uid())` pro operador — mas nas
 tabelas sem `cliente_id` direto (`rebanho_pesagens`, `rebanho_movimentacoes`,
 `rebanho_procedimentos_sanitarios`, `rebanho_lote_participacoes`) a policy
 sobe até `rebanho_animais` primeiro pra achar o `cliente_id`.
+
+As gravações dessas tabelas também conferem o papel do vínculo: administrador
+e editor gravam; leitor só consulta. Convites são resgatados pela RPC
+`resgatar_convite_rebanho`, que valida autenticação, e-mail e aplica o papel
+definido pelo gestor sem expor chave administrativa no navegador.
 
 `rebanho_auditoria` (trigger em animais/pesagens/movimentações/
 procedimentos) teve **dois problemas de segurança corrigidos ainda nesta

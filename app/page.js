@@ -111,24 +111,8 @@ function TelaVincularConvite({ onVinculado }) {
     setErro("");
     setCarregando(true);
     try {
-      const { data: sessao } = await supabase.auth.getSession();
-      const userId = sessao.session.user.id;
-      const userEmail = sessao.session.user.email;
-      const { data: clienteEncontrado, error: erroBusca } = await supabase
-        .from("clientes")
-        .select("id, consultor_id")
-        .eq("codigo_convite", codigo.trim())
-        .maybeSingle();
-      if (erroBusca) throw erroBusca;
-      if (!clienteEncontrado) {
-        setErro("Código inválido. Confira com seu consultor.");
-        return;
-      }
-      const { error: erroVinculo } = await supabase.from("clientes_usuarios").insert({
-        cliente_id: clienteEncontrado.id,
-        consultor_id: clienteEncontrado.consultor_id,
-        auth_user_id: userId,
-        email: userEmail,
+      const { error: erroVinculo } = await supabase.rpc("resgatar_convite_rebanho", {
+        p_codigo: codigo.trim(),
       });
       if (erroVinculo) {
         if (erroVinculo.code === "23505") {
@@ -181,7 +165,7 @@ function ResolveAcessoOperador({ sessao }) {
   const carregarVinculos = useCallback(async () => {
     const { data } = await supabase
       .from("clientes_usuarios")
-      .select("cliente_id, clientes(id, nome, consultor_id)")
+      .select("cliente_id, papel, clientes(id, nome, consultor_id)")
       .eq("auth_user_id", sessao.user.id);
     setVinculos(data || []);
   }, [sessao.user.id]);
@@ -194,12 +178,13 @@ function ResolveAcessoOperador({ sessao }) {
   if (vinculos.length === 0) return <TelaVincularConvite onVinculado={carregarVinculos} />;
 
   if (fazendaEscolhida) {
-    return <AppPrincipal consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} />;
+    const vinculo = vinculos.find((v) => v.cliente_id === fazendaEscolhida.id);
+    return <AppPrincipal consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} papel={vinculo?.papel || "editor"} />;
   }
 
   if (vinculos.length === 1) {
     const c = vinculos[0].clientes;
-    return <AppPrincipal consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} />;
+    return <AppPrincipal consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} papel={vinculos[0].papel || "editor"} />;
   }
 
   return (
@@ -271,7 +256,7 @@ function SeletorFazendaConsultor({ sessao }) {
 const DATA_FORMATTER = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
 // ---------- App principal (depois de resolvido o acesso) ----------
-function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, onTrocarFazenda }) {
+function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", onTrocarFazenda }) {
   const [tab, setTab] = useState("painel");
   const [menuAberto, setMenuAberto] = useState(false);
   const dados = useDadosRebanho(consultorId, clienteId);
@@ -356,7 +341,7 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isCon
               {tab === "pesagens" && <PesagensTab dados={dados} />}
               {tab === "sanidade" && <SanidadeTab dados={dados} />}
               {tab === "alertas" && <AlertasTab dados={dados} />}
-              {tab === "configuracoes" && <ConfiguracoesTab dados={dados} />}
+              {tab === "configuracoes" && <ConfiguracoesTab dados={dados} clienteId={clienteId} consultorId={consultorId} isConsultor={isConsultor} papelAtual={papel} />}
             </>
           )}
         </div>
