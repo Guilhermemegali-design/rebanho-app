@@ -153,6 +153,8 @@ operador aos animais da própria fazenda.
   usa a última data anterior disponível, incluindo o peso de entrada.
 - A mesma regra é usada na lista geral e na ficha do animal, evitando GMD
   vazio quando existem duas pesagens registradas na mesma data.
+- Cada pesagem pode ser excluída diretamente pela lista. Registros ainda
+  offline também saem da fila local para não reaparecerem na sincronização.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 

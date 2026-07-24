@@ -281,6 +281,18 @@ create policy "cliente_registra_pesagem_animal" on rebanho_pesagens
     animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
   );
 
+create policy "cliente_exclui_pesagem_animal" on rebanho_pesagens
+  for delete to authenticated
+  using (
+    animal_id in (
+      select a.id from rebanho_animais a
+      where a.cliente_id in (
+        select cliente_id from clientes_usuarios
+        where auth_user_id = (select auth.uid())
+      )
+    )
+  );
+
 create index idx_rebanho_pesagens_animal on rebanho_pesagens(animal_id, data);
 
 -- ------------------------------------------------------------

@@ -5,11 +5,26 @@ import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, calcularGmd } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { useBluetoothScale } from "@/lib/bluetoothScale";
-import { Radio, Bluetooth, BluetoothConnected, Scale, Search } from "lucide-react";
+import { Radio, Bluetooth, BluetoothConnected, Scale, Search, Trash2 } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, InputField, PrimaryButton } from "@/components/UI";
 
 export default function PesagensTab({ dados }) {
   const [modo, setModo] = useState("lista");
+  const [excluindoId, setExcluindoId] = useState(null);
+
+  async function excluirPesagem(pesagem, animal) {
+    const identificacao = animal?.brinco_atual || "sem identificação";
+    if (!window.confirm(`Excluir a pesagem de ${formatKg(pesagem.peso)} do animal ${identificacao}, em ${formatDataBR(pesagem.data)}?`)) return;
+    const chave = pesagem.id || pesagem.client_uuid;
+    setExcluindoId(chave);
+    try {
+      await dados.excluirPesagem(pesagem);
+    } catch (err) {
+      window.alert(err.message || "Não foi possível excluir a pesagem.");
+    } finally {
+      setExcluindoId(null);
+    }
+  }
 
   const recentes = useMemo(
     () => [...dados.pesagens].sort((a, b) => (b.data || "").localeCompare(a.data || "")).slice(0, 30),
@@ -36,6 +51,16 @@ export default function PesagensTab({ dados }) {
                 {!p.id ? " · aguardando sincronizar" : ""}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => excluirPesagem(p, animal)}
+              disabled={excluindoId === (p.id || p.client_uuid)}
+              aria-label={`Excluir pesagem do animal ${animal?.brinco_atual || ""}`}
+              title="Excluir pesagem"
+              style={{ ...styles.iconDangerBtn, opacity: excluindoId === (p.id || p.client_uuid) ? 0.5 : 1 }}
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         );
       })}
