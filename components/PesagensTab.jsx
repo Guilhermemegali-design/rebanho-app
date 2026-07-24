@@ -99,10 +99,31 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
     setErro("");
   }
   const ultimaPesagem = useMemo(() => {
-    if (!animalId) return null;
-    const historico = dados.pesagens.filter((p) => p.animal_id === animalId).sort((a, b) => a.data.localeCompare(b.data));
-    return historico[historico.length - 1] || null;
-  }, [dados.pesagens, animalId]);
+    if (!animalEscolhido || !data) return null;
+
+    // Para calcular GMD precisamos de dias decorridos. Uma segunda pesagem
+    // feita no mesmo dia não pode ser a referência anterior; nesse caso,
+    // busca a última data realmente anterior e também considera o peso de
+    // entrada do cadastro.
+    const referencias = dados.pesagens
+      .filter((p) => p.animal_id === animalEscolhido.id && p.data < data)
+      .map((p) => ({ peso: p.peso, data: p.data, origem: "pesagem" }));
+
+    if (
+      animalEscolhido.peso_entrada != null &&
+      animalEscolhido.data_entrada &&
+      animalEscolhido.data_entrada < data
+    ) {
+      referencias.push({
+        peso: animalEscolhido.peso_entrada,
+        data: animalEscolhido.data_entrada,
+        origem: "entrada",
+      });
+    }
+
+    referencias.sort((a, b) => a.data.localeCompare(b.data));
+    return referencias[referencias.length - 1] || null;
+  }, [dados.pesagens, animalEscolhido, data]);
 
   const gmdPrevisto = ultimaPesagem && peso !== ""
     ? calcularGmd(ultimaPesagem.peso, ultimaPesagem.data, Number(peso), data)
@@ -181,20 +202,22 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
 
       {animalEscolhido && (
         <div style={{ ...styles.card, marginTop: 14 }}>
-          <div style={styles.sectionTitle}>Referência anterior — brinco {animalEscolhido.brinco_atual}</div>
+          <div style={styles.sectionTitle}>Referência para o GMD — brinco {animalEscolhido.brinco_atual}</div>
           {ultimaPesagem ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
               <div>
-                <div style={styles.tableCellSub}>Data anterior</div>
+                <div style={styles.tableCellSub}>{ultimaPesagem.origem === "entrada" ? "Data de entrada" : "Data anterior"}</div>
                 <div style={styles.tableCellTitle}>{formatDataBR(ultimaPesagem.data)}</div>
               </div>
               <div>
-                <div style={styles.tableCellSub}>Peso anterior</div>
+                <div style={styles.tableCellSub}>{ultimaPesagem.origem === "entrada" ? "Peso de entrada" : "Peso anterior"}</div>
                 <div style={styles.tableCellTitle}>{formatKg(ultimaPesagem.peso)}</div>
               </div>
             </div>
           ) : (
-            <div style={styles.hardwareHint}>Este animal ainda não possui pesagem anterior.</div>
+            <div style={styles.hardwareHint}>
+              Ainda não existe peso registrado em uma data anterior. O GMD aparecerá quando houver pelo menos um dia entre os pesos.
+            </div>
           )}
         </div>
       )}
@@ -234,6 +257,9 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
             <div style={{ ...styles.listItemTitle, color: "#1F4D45" }}>{gmdPrevisto.toFixed(3)} kg/dia</div>
           </div>
         </div>
+      )}
+      {animalEscolhido && ultimaPesagem && peso === "" && (
+        <div style={{ ...styles.hardwareHint, marginTop: 10 }}>Digite o novo peso para calcular o GMD antes de salvar.</div>
       )}
 
       {erro && <div style={styles.errorBox}>{erro}</div>}

@@ -270,11 +270,23 @@ export default function AnimaisTab({ dados }) {
 }
 
 function infoPesoAnimal(animal, pesagens) {
-  const historico = [...pesagens.filter((p) => p.animal_id === animal.id)].sort((a, b) => a.data.localeCompare(b.data));
+  const historico = [...pesagens.filter((p) => p.animal_id === animal.id)].sort(
+    (a, b) => a.data.localeCompare(b.data) || (a.criado_em || "").localeCompare(b.criado_em || "")
+  );
   const ultimaPesagem = historico[historico.length - 1];
-  const penultimaPesagem = historico[historico.length - 2];
-  const gmd = penultimaPesagem && ultimaPesagem
-    ? calcularGmd(penultimaPesagem.peso, penultimaPesagem.data, ultimaPesagem.peso, ultimaPesagem.data)
+  const referenciasAnteriores = historico.filter((p) => ultimaPesagem && p.data < ultimaPesagem.data);
+  if (
+    ultimaPesagem &&
+    animal.peso_entrada != null &&
+    animal.data_entrada &&
+    animal.data_entrada < ultimaPesagem.data
+  ) {
+    referenciasAnteriores.push({ peso: animal.peso_entrada, data: animal.data_entrada });
+  }
+  referenciasAnteriores.sort((a, b) => a.data.localeCompare(b.data));
+  const referenciaAnterior = referenciasAnteriores[referenciasAnteriores.length - 1];
+  const gmd = referenciaAnterior && ultimaPesagem
+    ? calcularGmd(referenciaAnterior.peso, referenciaAnterior.data, ultimaPesagem.peso, ultimaPesagem.data)
     : null;
   return { ultimaPesagem, gmd };
 }
@@ -785,12 +797,10 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
   const local = dados.locais.find((l) => l.id === animal.local_atual_id);
   const fornecedor = dados.fornecedores.find((f) => f.id === animal.fornecedor_id);
 
-  const ordenadasAsc = useMemo(() => [...dados.pesagens.filter((p) => p.animal_id === animal.id)].sort((a, b) => a.data.localeCompare(b.data)), [dados.pesagens, animal.id]);
-  const ultimaPesagem = ordenadasAsc[ordenadasAsc.length - 1];
-  const penultimaPesagem = ordenadasAsc[ordenadasAsc.length - 2];
-  const gmd = penultimaPesagem && ultimaPesagem
-    ? calcularGmd(penultimaPesagem.peso, penultimaPesagem.data, ultimaPesagem.peso, ultimaPesagem.data)
-    : null;
+  const { ultimaPesagem, gmd } = useMemo(
+    () => infoPesoAnimal(animal, dados.pesagens),
+    [animal, dados.pesagens]
+  );
 
   const timeline = useMemo(() => {
     const itens = [];

@@ -149,6 +149,10 @@ operador aos animais da própria fazenda.
   anteriores; ao informar o novo peso, o GMD aparece antes da confirmação.
 - A identificação da pesagem usa um único campo para procurar parcialmente,
   digitar o número completo ou receber a leitura do bastão RFID.
+- O GMD ignora lançamentos feitos no mesmo dia como referência anterior e
+  usa a última data anterior disponível, incluindo o peso de entrada.
+- A mesma regra é usada na lista geral e na ficha do animal, evitando GMD
+  vazio quando existem duas pesagens registradas na mesma data.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 
