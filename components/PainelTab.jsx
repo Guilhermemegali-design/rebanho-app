@@ -1,20 +1,39 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { styles } from "@/lib/styles";
 import { formatKg, formatDataBR, calcularGmd } from "@/lib/format";
 import { calcularAlertas } from "@/lib/alerts";
-import { Users, TrendingUp, AlertTriangle, Syringe, Scale } from "lucide-react";
+import { Users, TrendingUp, AlertTriangle, Syringe, Scale, ChevronLeft } from "lucide-react";
 import { EmptyHint, PageHeader } from "@/components/UI";
 
 export default function PainelTab({ dados }) {
-  const { animais, locais, lotes, pesagens, procedimentos } = dados;
+  const { locais, lotes } = dados;
+  const [loteSelecionadoId, setLoteSelecionadoId] = useState(null);
+  const loteSelecionado = lotes.find((l) => l.id === loteSelecionadoId) || null;
+
+  // Painel geral olha a fazenda inteira; clicar num lote em "Distribuição
+  // por lote" filtra os mesmos indicadores só pros animais daquele lote.
+  const animais = useMemo(
+    () => (loteSelecionadoId ? dados.animais.filter((a) => a.lote_atual_id === loteSelecionadoId) : dados.animais),
+    [dados.animais, loteSelecionadoId]
+  );
+  const idsAnimais = useMemo(() => new Set(animais.map((a) => a.id)), [animais]);
+  const pesagens = useMemo(() => dados.pesagens.filter((p) => idsAnimais.has(p.animal_id)), [dados.pesagens, idsAnimais]);
+  const procedimentos = useMemo(() => dados.procedimentos.filter((p) => idsAnimais.has(p.animal_id)), [dados.procedimentos, idsAnimais]);
 
   const ativos = useMemo(() => animais.filter((a) => a.situacao === "ativo"), [animais]);
 
   const pesoMedio = useMemo(() => {
-    const ultimosPorAnimal = ultimaPesagemPorAnimal(pesagens, ativos);
-    const valores = Object.values(ultimosPorAnimal).map((p) => p.peso).filter((v) => v != null);
+    // Animal sem pesagem ainda entra na média pelo peso de entrada do
+    // cadastro — assim o indicador não fica em branco só porque ninguém
+    // pesou esse animal específico ainda.
+    const valores = ativos
+      .map((a) => {
+        const historico = pesagens.filter((p) => p.animal_id === a.id).sort((x, y) => y.data.localeCompare(x.data));
+        return historico[0] ? historico[0].peso : a.peso_entrada;
+      })
+      .filter((v) => v != null);
     if (valores.length === 0) return null;
     return valores.reduce((s, v) => s + v, 0) / valores.length;
   }, [pesagens, ativos]);
@@ -38,9 +57,20 @@ export default function PainelTab({ dados }) {
   const todosAlertas = useMemo(() => calcularAlertas({ animais, pesagens, procedimentos }), [animais, pesagens, procedimentos]);
   const alertas = todosAlertas.slice(0, 20);
 
+  const lotesAtivos = lotes.filter((l) => l.situacao === "ativo");
+
   return (
     <div>
-      <PageHeader title="Painel" subtitle="Indicadores gerais do rebanho." />
+      {loteSelecionado ? (
+        <>
+          <button onClick={() => setLoteSelecionadoId(null)} style={{ ...styles.linkBtn, width: "auto", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+            <ChevronLeft size={14} /> Ver painel geral da fazenda
+          </button>
+          <PageHeader title={loteSelecionado.nome} subtitle="Indicadores só deste lote." />
+        </>
+      ) : (
+        <PageHeader title="Painel" subtitle="Indicadores gerais do rebanho." />
+      )}
 
       <div style={styles.kpiGrid}>
         <div style={styles.kpiCard}>
@@ -56,8 +86,8 @@ export default function PainelTab({ dados }) {
           <div style={styles.kpiValor}>{gmdMedio != null ? `${gmdMedio.toFixed(3)} kg/d` : "—"}</div>
         </div>
         <div style={styles.kpiCard}>
-          <div style={styles.kpiHeader}><Syringe size={14} /> Lotes ativos</div>
-          <div style={styles.kpiValor}>{lotes.filter((l) => l.situacao === "ativo").length}</div>
+          <div style={styles.kpiHeader}><Syringe size={14} /> {loteSelecionado ? "Lote" : "Lotes ativos"}</div>
+          <div style={styles.kpiValor}>{loteSelecionado ? 1 : lotesAtivos.length}</div>
         </div>
       </div>
 
@@ -73,30 +103,25 @@ export default function PainelTab({ dados }) {
         </div>
       ))}
 
-      <div style={styles.sectionTitle}>Distribuição por lote</div>
-      {lotes.filter((l) => l.situacao === "ativo").length === 0 && <EmptyHint text="Nenhum lote cadastrado ainda." />}
-      {lotes.filter((l) => l.situacao === "ativo").map((lote) => {
-        const qtd = ativos.filter((a) => a.lote_atual_id === lote.id).length;
-        const local = locais.find((l) => l.id === lote.local_id);
-        return (
-          <div key={lote.id} style={styles.rowCard}>
-            <div style={{ flex: 1 }}>
-              <div style={styles.listItemTitle}>{lote.nome}</div>
-              <div style={styles.listItemSub}>{local ? local.nome : "Sem local definido"}</div>
-            </div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>{qtd}</div>
-          </div>
-        );
-      })}
+      {!loteSelecionado && (
+        <>
+          <div style={styles.sectionTitle}>Distribuição por lote</div>
+          {lotesAtivos.length === 0 && <EmptyHint text="Nenhum lote cadastrado ainda." />}
+          {lotesAtivos.map((lote) => {
+            const qtd = dados.animais.filter((a) => a.lote_atual_id === lote.id && a.situacao === "ativo").length;
+            const local = locais.find((l) => l.id === lote.local_id);
+            return (
+              <button key={lote.id} style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }} onClick={() => setLoteSelecionadoId(lote.id)}>
+                <div style={{ flex: 1 }}>
+                  <div style={styles.listItemTitle}>{lote.nome}</div>
+                  <div style={styles.listItemSub}>{local ? local.nome : "Sem local definido"}</div>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 16 }}>{qtd}</div>
+              </button>
+            );
+          })}
+        </>
+      )}
     </div>
   );
-}
-
-function ultimaPesagemPorAnimal(pesagens, animais) {
-  const resultado = {};
-  for (const animal of animais) {
-    const historico = pesagens.filter((p) => p.animal_id === animal.id).sort((a, b) => b.data.localeCompare(a.data));
-    if (historico[0]) resultado[animal.id] = historico[0];
-  }
-  return resultado;
 }
