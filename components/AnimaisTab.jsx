@@ -413,7 +413,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
   const [loteId, setLoteId] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
-  const [resultado, setResultado] = useState(null);
+  const [ultimoResultado, setUltimoResultado] = useState(null);
 
   const hoje = new Date().toISOString().slice(0, 10);
   const loteEscolhido = dados.lotes.find((l) => l.id === loteId);
@@ -433,8 +433,17 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
     try {
       const prefixo = gerarPrefixoLote(loteEscolhido?.nome);
       const dataCompacta = hoje.slice(2).replace(/-/g, "");
+      const prefixoCompleto = `${prefixo}-${dataCompacta}-`;
+      // Continua a numeração de onde parou, caso já tenha cadastrado
+      // outro grupo com o mesmo lote/data antes (não reaproveita número).
+      const proximoNumero = 1 + dados.animais.reduce((max, a) => {
+        if (!a.brinco_atual.startsWith(prefixoCompleto)) return max;
+        const n = Number(a.brinco_atual.slice(prefixoCompleto.length));
+        return Number.isFinite(n) && n > max ? n : max;
+      }, 0);
+
       const registros = Array.from({ length: qtd }, (_, i) => ({
-        brinco_atual: `${prefixo}-${dataCompacta}-${String(i + 1).padStart(2, "0")}`,
+        brinco_atual: `${prefixoCompleto}${String(proximoNumero + i).padStart(2, "0")}`,
         raca: raca || null,
         peso_entrada: peso === "" ? null : Number(peso),
         data_entrada: hoje,
@@ -442,29 +451,16 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
         local_atual_id: loteEscolhido?.local_id || null,
       }));
       const criados = await onSalvar(registros, loteId || null, loteEscolhido?.local_id || null);
-      setResultado({ primeiro: registros[0].brinco_atual, ultimo: registros[registros.length - 1].brinco_atual, total: criados.length });
+      setUltimoResultado({ primeiro: registros[0].brinco_atual, ultimo: registros[registros.length - 1].brinco_atual, total: criados.length });
+      // Mantém a tela preenchida (lote e raça costumam se repetir no
+      // mesmo dia) — só quantidade e peso somem, prontos pro próximo grupo.
+      setQuantidade("");
+      setPeso("");
     } catch (err) {
       setErro(err.message);
     } finally {
       setSalvando(false);
     }
-  }
-
-  if (resultado) {
-    return (
-      <div>
-        <BackHeader title="Entrada em lote" onBack={onCancelar} />
-        <div style={{ ...styles.alertaCard, background: "#E4EFE9", border: "1px solid #CDE3D9" }}>
-          <div>
-            <div style={{ ...styles.alertaTitulo, color: "#1F4D45" }}>{resultado.total} animal(is) cadastrado(s) com sucesso.</div>
-            <div style={styles.alertaSub}>
-              Identificação temporária de {resultado.primeiro} até {resultado.ultimo}. Edite cada animal (ou aponte o bastão RFID na ficha dele) para colocar o brinco real assim que tagueado.
-            </div>
-          </div>
-        </div>
-        <PrimaryButton onClick={onCancelar}>Voltar para a lista</PrimaryButton>
-      </div>
-    );
   }
 
   return (
@@ -475,6 +471,17 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
         temporária (ex: {gerarPrefixoLote(loteEscolhido?.nome)}-{hoje.slice(2).replace(/-/g, "")}-01) — edite depois com o brinco
         real ou aponte o bastão RFID na ficha de cada animal.
       </div>
+
+      {ultimoResultado && (
+        <div style={{ ...styles.alertaCard, background: "#E4EFE9", border: "1px solid #CDE3D9" }}>
+          <div>
+            <div style={{ ...styles.alertaTitulo, color: "#1F4D45" }}>{ultimoResultado.total} animal(is) cadastrado(s) com sucesso.</div>
+            <div style={styles.alertaSub}>
+              De {ultimoResultado.primeiro} até {ultimoResultado.ultimo}. Pode lançar outro grupo do mesmo dia abaixo, ou voltar para a lista.
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={styles.card}>
         <InputField label="Quantidade de animais" type="number" value={quantidade} onChange={setQuantidade} placeholder="Ex: 20" />
@@ -491,6 +498,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
       <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Cadastrando..." : "Cadastrar animais"}</PrimaryButton>
+      {ultimoResultado && <button onClick={onCancelar} style={styles.secondaryBtn}>Concluir e voltar para a lista</button>}
     </div>
   );
 }
