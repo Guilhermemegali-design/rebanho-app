@@ -5,8 +5,8 @@ import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, calcularGmd } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { useBluetoothScale } from "@/lib/bluetoothScale";
-import { Radio, Bluetooth, BluetoothConnected, Scale } from "lucide-react";
-import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, PrimaryButton } from "@/components/UI";
+import { Radio, Bluetooth, BluetoothConnected, Scale, Search } from "lucide-react";
+import { PageHeader, BackHeader, EmptyHint, InputField, PrimaryButton } from "@/components/UI";
 
 export default function PesagensTab({ dados }) {
   const [modo, setModo] = useState("lista");
@@ -75,11 +75,27 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
   }, [escala.peso]);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
+  const resultadosBusca = useMemo(() => {
+    const termo = brincoDigitado.trim().toLowerCase();
+    if (!termo || animalEscolhido) return [];
+    return dados.animais
+      .filter((animal) => (
+        animal.brinco_atual.toLowerCase().includes(termo) ||
+        (animal.brinco_rfid || "").toLowerCase().includes(termo)
+      ))
+      .slice(0, 8);
+  }, [brincoDigitado, dados.animais, animalEscolhido]);
 
   function handleBrincoDigitado(valor) {
     setBrincoDigitado(valor);
     const animal = encontrarAnimalPorTag(dados.animais, valor.trim());
     setAnimalId(animal?.id || "");
+    setErro("");
+  }
+
+  function escolherAnimal(animal) {
+    setAnimalId(animal.id);
+    setBrincoDigitado(animal.brinco_atual);
     setErro("");
   }
   const ultimaPesagem = useMemo(() => {
@@ -124,23 +140,42 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
       </div>
 
       <div style={styles.card}>
-        <InputField
-          label="Digite o brinco visual ou RFID"
-          value={brincoDigitado}
-          onChange={handleBrincoDigitado}
-          placeholder="Ex: 1024"
-        />
-        <SelectField
-          label="Ou selecione o animal"
-          value={animalId}
-          onChange={(id) => {
-            setAnimalId(id);
-            const animal = dados.animais.find((item) => item.id === id);
-            setBrincoDigitado(animal?.brinco_atual || "");
-            setErro("");
-          }}
-          options={[{ value: "", label: "Selecione..." }, ...dados.animais.map((a) => ({ value: a.id, label: a.brinco_atual }))]}
-        />
+        <div style={{ ...styles.field, position: "relative" }}>
+          <div style={styles.fieldLabel}>Procurar, digitar ou ler com bastão</div>
+          <div style={{ ...styles.tableSearchBox, border: animalEscolhido ? "1px solid #8CB8A5" : "1px solid #E8E6DF" }}>
+            <Search size={16} color="#6F7772" />
+            <input
+              value={brincoDigitado}
+              onChange={(event) => handleBrincoDigitado(event.target.value)}
+              placeholder="Brinco visual ou RFID"
+              autoComplete="off"
+              style={{ ...styles.input, border: 0, padding: 0, background: "transparent" }}
+            />
+          </div>
+          {resultadosBusca.length > 0 && (
+            <div style={{ position: "absolute", zIndex: 20, top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #E1DED5", borderRadius: 10, boxShadow: "0 10px 24px rgba(27, 45, 39, 0.12)", overflow: "hidden" }}>
+              {resultadosBusca.map((animal) => (
+                <button
+                  key={animal.id}
+                  type="button"
+                  onClick={() => escolherAnimal(animal)}
+                  style={{ width: "100%", padding: "11px 13px", border: 0, borderBottom: "1px solid #F1EFE8", background: "#fff", textAlign: "left", cursor: "pointer" }}
+                >
+                  <div style={styles.tableCellTitle}>{animal.brinco_atual}</div>
+                  <div style={styles.tableCellSub}>{animal.brinco_rfid ? `RFID ${animal.brinco_rfid}` : "Sem RFID"}{animal.raca ? ` · ${animal.raca}` : ""}</div>
+                </button>
+              ))}
+            </div>
+          )}
+          {brincoDigitado && !animalEscolhido && resultadosBusca.length === 0 && (
+            <div style={{ ...styles.tableCellSub, marginTop: 6 }}>Nenhum animal encontrado.</div>
+          )}
+          {animalEscolhido && (
+            <div style={{ ...styles.tableCellSub, color: "#1F4D45", marginTop: 6 }}>
+              Animal selecionado: {animalEscolhido.brinco_atual}{animalEscolhido.brinco_rfid ? ` · RFID ${animalEscolhido.brinco_rfid}` : ""}
+            </div>
+          )}
+        </div>
         <InputField label="Data" type="date" value={data} onChange={setData} />
       </div>
 

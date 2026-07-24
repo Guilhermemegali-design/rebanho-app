@@ -147,6 +147,8 @@ operador aos animais da própria fazenda.
   animais vinculados são preservados e ficam sem lote.
 - Na pesagem, digitar o brinco visual ou RFID mostra a data e o peso
   anteriores; ao informar o novo peso, o GMD aparece antes da confirmação.
+- A identificação da pesagem usa um único campo para procurar parcialmente,
+  digitar o número completo ou receber a leitura do bastão RFID.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 
