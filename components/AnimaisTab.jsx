@@ -354,7 +354,18 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
           onChange={setRaca}
           options={[{ value: "", label: "Selecione..." }, ...RACAS.map((nome) => ({ value: nome, label: nome }))]}
         />
-        <InputField label="Categoria" value={categoria} onChange={setCategoria} placeholder="Ex: Bezerro, Novilha, Boi" />
+        <SelectField
+          label="Categoria"
+          value={categoria}
+          onChange={setCategoria}
+          options={[
+            { value: "", label: "Selecione..." },
+            { value: "Boi", label: "Boi" },
+            { value: "Vaca", label: "Vaca" },
+            { value: "Novilha", label: "Novilha" },
+            { value: "Bezerro", label: "Bezerro" },
+          ]}
+        />
         <InputField label="Origem" value={origem} onChange={setOrigem} placeholder="De onde veio o animal" />
 
         {!novoFornecedor ? (
@@ -577,7 +588,18 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
           onChange={setRaca}
           options={[{ value: "", label: "Selecione..." }, ...RACAS.map((nome) => ({ value: nome, label: nome }))]}
         />
-        <InputField label="Categoria" value={categoria} onChange={setCategoria} placeholder="Ex: Bezerro, Novilha, Boi" />
+        <SelectField
+          label="Categoria"
+          value={categoria}
+          onChange={setCategoria}
+          options={[
+            { value: "", label: "Selecione..." },
+            { value: "Boi", label: "Boi" },
+            { value: "Vaca", label: "Vaca" },
+            { value: "Novilha", label: "Novilha" },
+            { value: "Bezerro", label: "Bezerro" },
+          ]}
+        />
         <InputField label="Origem" value={origem} onChange={setOrigem} placeholder="De onde vieram os animais" />
 
         {!novoFornecedor ? (

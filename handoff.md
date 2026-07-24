@@ -129,6 +129,8 @@ operador aos animais da própria fazenda.
 
 - No cadastro individual, a raça é escolhida entre Nelore, Nelorado,
   F1 Angus, Cruzado, Guzera e Guzeratado.
+- A categoria é escolhida entre Boi, Vaca, Novilha e Bezerro, tanto no
+  cadastro individual quanto no cadastro contínuo.
 - O seletor de lote contém a opção `+ Criar novo lote`, permitindo criar
   e já vincular o lote sem sair da tela do animal.
 - Em Movimentações → Venda é possível selecionar ou ler por RFID vários
