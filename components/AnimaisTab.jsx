@@ -802,6 +802,10 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
     () => infoPesoAnimal(animal, dados.pesagens),
     [animal, dados.pesagens]
   );
+  const hoje = new Date().toISOString().slice(0, 10);
+  const gmdDesdeEntrada = ultimaPesagem
+    ? calcularGmd(animal.peso_entrada, animal.data_entrada, ultimaPesagem.peso, hoje)
+    : null;
 
   const timeline = useMemo(() => {
     const itens = [];
@@ -881,6 +885,12 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
         <Field label="Local atual" value={local ? local.nome : "—"} />
         <Field label="Último peso" value={ultimaPesagem ? `${formatKg(ultimaPesagem.peso)} em ${formatDataBR(ultimaPesagem.data)}` : "Sem pesagem registrada"} />
         <Field label="GMD (última x penúltima pesagem)" value={gmd != null ? `${gmd.toFixed(3)} kg/dia` : "—"} />
+        <Field
+          label={`GMD desde a entrada até hoje (${formatDataBR(hoje)})`}
+          value={gmdDesdeEntrada != null
+            ? `${gmdDesdeEntrada.toFixed(3)} kg/dia · baseado no último peso conhecido`
+            : "Aguardando uma pesagem posterior à entrada"}
+        />
         <Field label="Fornecedor" value={fornecedor ? fornecedor.nome : "—"} />
         <Field label="Entrada" value={`${formatDataBR(animal.data_entrada)} · ${formatKg(animal.peso_entrada)} · ${formatBRL(animal.valor_entrada)}`} />
         {animal.nota_fiscal_url && (

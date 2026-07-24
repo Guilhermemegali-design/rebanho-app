@@ -157,6 +157,8 @@ operador aos animais da própria fazenda.
   offline também saem da fila local para não reaparecerem na sincronização.
 - A ficha do animal permite excluir diretamente cada item da linha do
   tempo: pesagem, movimentação ou manejo sanitário.
+- A ficha mostra também o GMD acumulado desde a entrada até o dia em que
+  foi aberta, usando o último peso conhecido como referência.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 
