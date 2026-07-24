@@ -159,6 +159,9 @@ operador aos animais da própria fazenda.
   tempo: pesagem, movimentação ou manejo sanitário.
 - A ficha mostra também o GMD acumulado desde a entrada até o dia em que
   foi aberta, usando o último peso conhecido como referência.
+- O quadro de Sanidade permite excluir manejos individuais. Lançamentos
+  coletivos recebem um identificador de grupo e podem ser apagados do lote
+  inteiro com uma única confirmação.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 

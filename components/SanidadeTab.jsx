@@ -4,13 +4,14 @@ import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Radio, Syringe, Plus } from "lucide-react";
+import { Radio, Syringe, Trash2 } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = { vacina: "Vacinação", vermifugo: "Vermifugação", diagnostico: "Diagnóstico", tratamento: "Tratamento" };
 
 export default function SanidadeTab({ dados }) {
   const [modo, setModo] = useState("lista");
+  const [excluindo, setExcluindo] = useState(null);
 
   const recentes = useMemo(
     () => [...dados.procedimentos].sort((a, b) => (b.data_aplicacao || "").localeCompare(a.data_aplicacao || "")).slice(0, 30),
@@ -19,6 +20,29 @@ export default function SanidadeTab({ dados }) {
 
   if (modo === "novo") {
     return <FormProcedimento dados={dados} onSalvo={() => setModo("lista")} onCancelar={() => setModo("lista")} />;
+  }
+
+  async function handleExcluir(procedimento, animal) {
+    const grupo = procedimento.grupo_lancamento;
+    const itensDoGrupo = grupo
+      ? dados.procedimentos.filter((item) => item.grupo_lancamento === grupo)
+      : [];
+    const lote = dados.lotes.find((item) => item.id === procedimento.lote_lancamento_id);
+    const mensagem = grupo
+      ? `Este manejo foi lançado para o lote ${lote?.nome || ""} (${itensDoGrupo.length} animais). Excluir o lançamento do lote inteiro?`
+      : `Excluir este manejo sanitário do animal ${animal?.brinco_atual || "selecionado"}?`;
+    if (!window.confirm(mensagem)) return;
+
+    const chave = grupo || procedimento.id || procedimento.client_uuid;
+    setExcluindo(chave);
+    try {
+      if (grupo) await dados.excluirProcedimentosEmGrupo(grupo);
+      else await dados.excluirProcedimento(procedimento);
+    } catch (err) {
+      window.alert(err.message || "Não foi possível excluir o manejo sanitário.");
+    } finally {
+      setExcluindo(null);
+    }
   }
 
   return (
@@ -39,9 +63,20 @@ export default function SanidadeTab({ dados }) {
               <div style={styles.listItemSub}>
                 {formatDataBR(p.data_aplicacao)}{medicamento ? ` · ${medicamento.nome}` : ""}
                 {emCarencia ? ` · carência ${diasRestantesCarencia(p)}d` : ""}
+                {p.grupo_lancamento ? ` · lote ${dados.lotes.find((lote) => lote.id === p.lote_lancamento_id)?.nome || "inteiro"}` : ""}
                 {!p.id ? " · aguardando sincronizar" : ""}
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => handleExcluir(p, animal)}
+              disabled={excluindo === (p.grupo_lancamento || p.id || p.client_uuid)}
+              aria-label={p.grupo_lancamento ? "Excluir manejo do lote inteiro" : "Excluir manejo sanitário"}
+              title={p.grupo_lancamento ? "Excluir do lote inteiro" : "Excluir manejo"}
+              style={{ ...styles.iconDangerBtn, opacity: excluindo === (p.grupo_lancamento || p.id || p.client_uuid) ? 0.5 : 1 }}
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         );
       })}
@@ -115,7 +150,7 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
         observacoes: observacoes || null,
       };
       if (alcance === "lote") {
-        await dados.registrarProcedimentosEmLote(animaisDoLote.map((animal) => animal.id), procedimento);
+        await dados.registrarProcedimentosEmLote(animaisDoLote.map((animal) => animal.id), procedimento, loteId);
       } else {
         await dados.registrarProcedimento(animalId, procedimento);
       }

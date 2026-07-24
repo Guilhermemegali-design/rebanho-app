@@ -341,6 +341,8 @@ create table rebanho_procedimentos_sanitarios (
   client_uuid text unique, -- gerado no aparelho quando registrado offline
   animal_id uuid not null references rebanho_animais(id) on delete cascade,
   consultor_id uuid not null references auth.users(id) on delete cascade,
+  grupo_lancamento text,
+  lote_lancamento_id uuid references rebanho_lotes(id) on delete set null,
   tipo text not null check (tipo in ('vacina', 'vermifugo', 'diagnostico', 'tratamento')),
   medicamento_id uuid references rebanho_medicamentos(id) on delete set null,
   dose text,
@@ -379,6 +381,8 @@ create policy "cliente_exclui_procedimento" on rebanho_procedimentos_sanitarios
   );
 
 create index idx_rebanho_procedimentos_animal on rebanho_procedimentos_sanitarios(animal_id, data_aplicacao);
+create index idx_rebanho_procedimentos_grupo on rebanho_procedimentos_sanitarios(grupo_lancamento)
+  where grupo_lancamento is not null;
 
 -- ------------------------------------------------------------
 -- TABELA: rebanho_auditoria
