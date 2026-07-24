@@ -127,6 +127,9 @@ create table rebanho_animais (
   local_atual_id uuid references rebanho_locais(id) on delete set null,
   lote_atual_id uuid references rebanho_lotes(id) on delete set null,
   observacoes text,
+  -- Nota fiscal de compra do animal (opcional) — arquivo enviado para o
+  -- bucket documentos-rebanho (ver final do arquivo).
+  nota_fiscal_url text,
   criado_em timestamptz default now(),
   atualizado_em timestamptz default now()
 );
@@ -399,3 +402,26 @@ create trigger trg_auditoria_movimentacoes
 create trigger trg_auditoria_procedimentos
   after insert or update or delete on rebanho_procedimentos_sanitarios
   for each row execute function rebanho_registrar_auditoria();
+
+-- ------------------------------------------------------------
+-- STORAGE: bucket para documentos do rebanho (nota fiscal de compra
+-- do animal, por enquanto) — mesmo padrão dos buckets de documentos
+-- do Consultoria-main: público para leitura, upload restrito à
+-- própria pasta do usuário (auth.uid()).
+-- ------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('documentos-rebanho', 'documentos-rebanho', true)
+on conflict (id) do nothing;
+
+create policy "usuario_envia_documento_rebanho" on storage.objects
+  for insert with check (bucket_id = 'documentos-rebanho' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "qualquer_um_ve_documentos_rebanho" on storage.objects
+  for select using (bucket_id = 'documentos-rebanho');
+
+create policy "usuario_atualiza_documento_rebanho" on storage.objects
+  for update using (bucket_id = 'documentos-rebanho' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'documentos-rebanho' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "usuario_apaga_documento_rebanho" on storage.objects
+  for delete using (bucket_id = 'documentos-rebanho' and (storage.foldername(name))[1] = auth.uid()::text);

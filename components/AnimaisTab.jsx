@@ -5,6 +5,7 @@ import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL, calcularGmd } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { statusAnimal } from "@/lib/alerts";
+import { enviarDocumentoRebanho } from "@/lib/storage";
 import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, ArrowLeftRight, Syringe } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
@@ -201,11 +202,23 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
   const [pesoEntrada, setPesoEntrada] = useState(inicial?.peso_entrada ?? "");
   const [valorEntrada, setValorEntrada] = useState(inicial?.valor_entrada ?? "");
   const [observacoes, setObservacoes] = useState(inicial?.observacoes || "");
+  const [novoFornecedor, setNovoFornecedor] = useState(false);
+  const [nomeNovoFornecedor, setNomeNovoFornecedor] = useState("");
+  const [notaFiscalFile, setNotaFiscalFile] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
 
   const aoLerTag = useCallback((tag) => setBrincoRfid(tag), []);
   const { lendo } = useRfidScanner(aoLerTag);
+
+  function handleEscolherFornecedor(id) {
+    if (id === "__novo__") {
+      setNovoFornecedor(true);
+      setFornecedorId("");
+      return;
+    }
+    setFornecedorId(id);
+  }
 
   async function handleSalvar() {
     // Fazenda que só usa RFID (sem brinco visual): usa o próprio código
@@ -219,18 +232,30 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
     setErro("");
     setSalvando(true);
     try {
+      let fornecedorIdFinal = fornecedorId;
+      if (novoFornecedor && nomeNovoFornecedor.trim()) {
+        const criado = await dados.criarFornecedor({ nome: nomeNovoFornecedor.trim() });
+        fornecedorIdFinal = criado.id;
+      }
+
+      let notaFiscalUrl = inicial?.nota_fiscal_url || null;
+      if (notaFiscalFile) {
+        notaFiscalUrl = await enviarDocumentoRebanho(notaFiscalFile);
+      }
+
       await onSalvar({
         brinco_atual: brincoFinal,
         brinco_rfid: brincoRfid.trim() || null,
         sexo,
         raca: raca || null,
         origem: origem || null,
-        fornecedor_id: fornecedorId || null,
+        fornecedor_id: fornecedorIdFinal || null,
         categoria: categoria || null,
         data_entrada: dataEntrada,
         peso_entrada: pesoEntrada === "" ? null : Number(pesoEntrada),
         valor_entrada: valorEntrada === "" ? null : Number(valorEntrada),
         observacoes: observacoes || null,
+        nota_fiscal_url: notaFiscalUrl,
       });
     } catch (err) {
       setErro(err.message);
@@ -257,16 +282,36 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
         <InputField label="Raça" value={raca} onChange={setRaca} placeholder="Ex: Nelore" />
         <InputField label="Categoria" value={categoria} onChange={setCategoria} placeholder="Ex: Bezerro, Novilha, Boi" />
         <InputField label="Origem" value={origem} onChange={setOrigem} placeholder="De onde veio o animal" />
-        <SelectField
-          label="Fornecedor"
-          value={fornecedorId}
-          onChange={setFornecedorId}
-          options={[{ value: "", label: "Sem fornecedor" }, ...dados.fornecedores.map((f) => ({ value: f.id, label: f.nome }))]}
-        />
+
+        {!novoFornecedor ? (
+          <SelectField
+            label="Fornecedor"
+            value={fornecedorId}
+            onChange={handleEscolherFornecedor}
+            options={[
+              { value: "", label: "Sem fornecedor" },
+              ...dados.fornecedores.map((f) => ({ value: f.id, label: f.nome })),
+              { value: "__novo__", label: "+ Cadastrar novo fornecedor" },
+            ]}
+          />
+        ) : (
+          <InputField label="Nome do novo fornecedor" value={nomeNovoFornecedor} onChange={setNomeNovoFornecedor} placeholder="Ex: Fazenda São José" />
+        )}
+
         <InputField label="Data de entrada" type="date" value={dataEntrada} onChange={setDataEntrada} />
         <InputField label="Peso de entrada (kg)" type="number" value={pesoEntrada} onChange={setPesoEntrada} placeholder="0" />
         <InputField label="Valor de entrada (R$)" type="number" value={valorEntrada} onChange={setValorEntrada} placeholder="0,00" />
         <TextAreaField label="Observações" value={observacoes} onChange={setObservacoes} placeholder="Opcional" />
+
+        <label style={styles.field}>
+          <div style={styles.fieldLabel}>Nota fiscal (opcional)</div>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setNotaFiscalFile(e.target.files?.[0] || null)} />
+          {!notaFiscalFile && inicial?.nota_fiscal_url && (
+            <div style={{ fontSize: 12, marginTop: 4 }}>
+              <a href={inicial.nota_fiscal_url} target="_blank" rel="noopener noreferrer">Ver nota fiscal já anexada</a>
+            </div>
+          )}
+        </label>
       </div>
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
@@ -337,6 +382,9 @@ function FichaAnimal({ dados, animal, onVoltar }) {
         <Field label="GMD (última x penúltima pesagem)" value={gmd != null ? `${gmd.toFixed(3)} kg/dia` : "—"} />
         <Field label="Fornecedor" value={fornecedor ? fornecedor.nome : "—"} />
         <Field label="Entrada" value={`${formatDataBR(animal.data_entrada)} · ${formatKg(animal.peso_entrada)} · ${formatBRL(animal.valor_entrada)}`} />
+        {animal.nota_fiscal_url && (
+          <Field label="Nota fiscal" value={<a href={animal.nota_fiscal_url} target="_blank" rel="noopener noreferrer">Ver arquivo anexado</a>} />
+        )}
         {animal.observacoes && <Field label="Observações" value={animal.observacoes} multiline />}
       </div>
 
