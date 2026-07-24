@@ -149,6 +149,13 @@ create policy "cliente_edita_animais" on rebanho_animais
   for update using (cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
   with check (cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()));
 
+create policy "cliente_exclui_animais" on rebanho_animais
+  for delete to authenticated
+  using (cliente_id in (
+    select cliente_id from clientes_usuarios
+    where auth_user_id = (select auth.uid())
+  ));
+
 create index idx_rebanho_animais_cliente on rebanho_animais(cliente_id);
 create index idx_rebanho_animais_brinco on rebanho_animais(brinco_atual);
 create index idx_rebanho_animais_brinco_rfid on rebanho_animais(brinco_rfid);

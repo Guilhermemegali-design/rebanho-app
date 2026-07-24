@@ -114,6 +114,11 @@ Os animais cadastrados na sequência aparecem logo abaixo do formulário
 com botão **Editar**. A correção de brinco ou peso acontece na própria
 tela, sem voltar para a lista geral.
 
+Há também um botão **Excluir** ao lado de **Editar**, tanto nessa sequência
+quanto na ficha individual. A exclusão exige confirmação e remove o animal
+e seu histórico relacionado; a policy `cliente_exclui_animais` limita o
+operador aos animais da própria fazenda.
+
 ## Fluxo de cadastro e venda no curral
 
 - No cadastro individual, a raça é escolhida entre Nelore, Nelorado,

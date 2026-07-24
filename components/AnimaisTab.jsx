@@ -96,6 +96,7 @@ export default function AnimaisTab({ dados }) {
           return criado;
         }}
         onAtualizar={dados.atualizarAnimal}
+        onExcluir={dados.excluirAnimal}
         onCancelar={() => setModo("lista")}
       />
     );
@@ -107,6 +108,10 @@ export default function AnimaisTab({ dados }) {
         dados={dados}
         animal={dados.animais.find((a) => a.id === animalSelecionado.id) || animalSelecionado}
         onVoltar={() => setModo("lista")}
+        onExcluido={() => {
+          setAnimalSelecionado(null);
+          setModo("lista");
+        }}
       />
     );
   }
@@ -435,7 +440,7 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
 
 // ---------- Cadastro contínuo no curral: cada animal mantém brinco e
 // peso próprios, enquanto os dados do grupo permanecem preenchidos. ----------
-function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onCancelar }) {
+function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar }) {
   const [brinco, setBrinco] = useState("");
   const [peso, setPeso] = useState("");
   const [raca, setRaca] = useState("");
@@ -523,18 +528,40 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onCancelar }) {
                 <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
                 <div style={styles.listItemSub}>{formatKg(animal.peso_entrada)} · {animal.raca || "Sem raça"}</div>
               </div>
-              <button
-                type="button"
-                style={styles.editLinkBtn}
-                onClick={() => {
-                  setEditandoId(animal.id);
-                  setBrinco(animal.brinco_atual || "");
-                  setPeso(animal.peso_entrada ?? "");
-                  requestAnimationFrame(() => brincoRef.current?.focus());
-                }}
-              >
-                Editar
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  style={styles.editLinkBtn}
+                  onClick={() => {
+                    setEditandoId(animal.id);
+                    setBrinco(animal.brinco_atual || "");
+                    setPeso(animal.peso_entrada ?? "");
+                    requestAnimationFrame(() => brincoRef.current?.focus());
+                  }}
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  style={{ ...styles.editLinkBtn, color: "#A13D32" }}
+                  onClick={async () => {
+                    if (!window.confirm(`Excluir o animal ${animal.brinco_atual}? O histórico individual também será removido.`)) return;
+                    try {
+                      await onExcluir(animal.id);
+                      setRecentes((atuais) => atuais.filter((item) => item.id !== animal.id));
+                      if (editandoId === animal.id) {
+                        setEditandoId(null);
+                        setBrinco("");
+                        setPeso("");
+                      }
+                    } catch (err) {
+                      setErro(err.message);
+                    }
+                  }}
+                >
+                  Excluir
+                </button>
+              </div>
             </div>
           ))}
           <button type="button" onClick={onCancelar} style={styles.secondaryBtn}>Concluir e voltar para a lista</button>
@@ -545,7 +572,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onCancelar }) {
 }
 
 // ---------- Ficha individual ----------
-function FichaAnimal({ dados, animal, onVoltar }) {
+function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
   const [editando, setEditando] = useState(false);
 
   const lote = dados.lotes.find((l) => l.id === animal.lote_atual_id);
@@ -594,7 +621,23 @@ function FichaAnimal({ dados, animal, onVoltar }) {
     <div>
       <div style={styles.backHeaderRow}>
         <BackHeader title={animal.brinco_atual} onBack={onVoltar} semMargem />
-        <button style={styles.editLinkBtn} onClick={() => setEditando(true)}>Editar</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={styles.editLinkBtn} onClick={() => setEditando(true)}>Editar</button>
+          <button
+            style={{ ...styles.editLinkBtn, color: "#A13D32" }}
+            onClick={async () => {
+              if (!window.confirm(`Excluir o animal ${animal.brinco_atual}? Pesagens, movimentações e sanidade também serão removidas.`)) return;
+              try {
+                await dados.excluirAnimal(animal.id);
+                onExcluido();
+              } catch (err) {
+                window.alert(err.message);
+              }
+            }}
+          >
+            Excluir
+          </button>
+        </div>
       </div>
 
       <div style={styles.card}>
