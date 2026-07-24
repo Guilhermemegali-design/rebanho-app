@@ -30,10 +30,10 @@ export default function Sidebar({ tab, onSelecionarTab, clienteNome, isConsultor
       {isMobileAberta && <div className="sidebar-drawer-backdrop hide-desktop" onClick={onFechar} />}
       <aside className={`sidebar-shell ${isMobileAberta ? "aberta" : ""}`} style={styles.sidebar}>
         <div style={styles.sidebarHeader}>
-          <div style={styles.sidebarLogoBox}>R</div>
+          <img src="/rastro-logo.png?v=2" alt="RASTRO" style={styles.sidebarLogoBox} />
           <div style={{ flex: 1 }}>
-            <div style={styles.sidebarBrand}>Rebanho</div>
-            <div style={styles.sidebarBrandSub}>Gestão de rebanho</div>
+            <div style={styles.sidebarBrand}>RASTRO</div>
+            <div style={styles.sidebarBrandSub}>Gestão individual do rebanho</div>
           </div>
           <button className="hide-desktop" onClick={onFechar} style={{ background: "transparent", border: "none", color: "#CFE3DC", cursor: "pointer", display: "flex" }}>
             <X size={18} />

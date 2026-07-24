@@ -69,7 +69,8 @@ function TelaLogin() {
   return (
     <div style={styles.loginScreen}>
       <div style={styles.loginCard}>
-        <div style={styles.loginBrand}>Rebanho</div>
+        <img src="/rastro-logo.png?v=2" alt="" style={{ width: 72, height: 72, borderRadius: 18, marginBottom: 12 }} />
+        <div style={styles.loginBrand}>RASTRO</div>
         <div style={styles.loginSub}>{modo === "login" ? "Acompanhamento individual do rebanho" : "Crie sua conta de acesso"}</div>
         <form onSubmit={handleSubmit}>
           <label style={styles.field}>
@@ -250,7 +251,8 @@ function SeletorFazendaConsultor({ sessao }) {
   return (
     <div style={styles.loginScreen}>
       <div style={styles.loginCard}>
-        <div style={styles.loginBrand}>Rebanho</div>
+        <img src="/rastro-logo.png?v=2" alt="" style={{ width: 72, height: 72, borderRadius: 18, marginBottom: 12 }} />
+        <div style={styles.loginBrand}>RASTRO</div>
         <div style={styles.loginSub}>Escolha a fazenda</div>
         {clientes.length === 0 && <div style={styles.emptyHint}>Nenhum cliente cadastrado ainda.</div>}
         <div style={{ marginTop: 8, maxHeight: "50vh", overflowY: "auto" }}>

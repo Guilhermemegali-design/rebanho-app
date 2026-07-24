@@ -9,11 +9,14 @@
 // que o APP em si (a interface) carregue offline.
 // ============================================================
 
-const CACHE_NAME = "rebanho-cache-v1";
+const CACHE_NAME = "rastro-cache-v2";
 
 const ARQUIVOS_ESSENCIAIS = [
   "/",
   "/manifest.json",
+  "/rastro-logo.png?v=2",
+  "/icon-192.png?v=2",
+  "/icon-512.png?v=2",
 ];
 
 self.addEventListener("install", (event) => {

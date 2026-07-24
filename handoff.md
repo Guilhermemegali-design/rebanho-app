@@ -170,6 +170,9 @@ operador aos animais da própria fazenda.
 - O botão de editar acompanha o botão de excluir em animais, pesagens,
   sanidade, transferências e itens da linha do tempo. Registros offline
   são atualizados na fila local e manejos coletivos são editados em grupo.
+- A marca do produto é **RASTRO**, com cabeça bovina, brinco RFID e
+  marcador de localização. Ícones PWA e cache receberam versão nova para
+  atualizar também instalações existentes sem novo cadastro.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 
