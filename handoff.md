@@ -105,14 +105,16 @@ Depois de ver uma referência visual do usuário, o app foi redesenhado de
 
 ## Cadastro em lote (`FormAnimaisEmLote` dentro de `AnimaisTab.jsx`)
 
-Fluxo contínuo para o curral, mas mantendo cada animal individual. O
-usuário informa brinco e peso próprios, além de raça e lote do grupo.
-Depois de salvar, o formulário permanece aberto com raça e lote
-preenchidos; somente brinco e peso são limpos e o foco volta para o brinco.
+Fluxo contínuo para o curral, mas mantendo cada animal individual. A tela
+repete todos os campos do cadastro individual: brinco visual/RFID, peso,
+sexo, raça, categoria, origem, fornecedor, lote, data, valor/preço da
+arroba, observações e nota fiscal. Depois de salvar, o formulário permanece
+aberto com os dados do grupo preenchidos; identificadores, peso, valor
+total e documento são limpos, e o foco volta para o brinco.
 
 Os animais cadastrados na sequência aparecem logo abaixo do formulário
-com botão **Editar**. A correção de brinco ou peso acontece na própria
-tela, sem voltar para a lista geral.
+com botão **Editar**. A ficha completa do animal volta ao formulário para
+correção na própria tela, sem retornar à lista geral.
 
 Há também um botão **Excluir** ao lado de **Editar**, tanto nessa sequência
 quanto na ficha individual. A exclusão exige confirmação e remove o animal

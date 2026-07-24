@@ -442,37 +442,97 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
 // peso próprios, enquanto os dados do grupo permanecem preenchidos. ----------
 function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar }) {
   const [brinco, setBrinco] = useState("");
+  const [brincoRfid, setBrincoRfid] = useState("");
   const [peso, setPeso] = useState("");
+  const [sexo, setSexo] = useState("femea");
   const [raca, setRaca] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [origem, setOrigem] = useState("");
+  const [fornecedorId, setFornecedorId] = useState("");
+  const [novoFornecedor, setNovoFornecedor] = useState(false);
+  const [nomeNovoFornecedor, setNomeNovoFornecedor] = useState("");
   const [loteId, setLoteId] = useState("");
+  const [novoLote, setNovoLote] = useState(false);
+  const [nomeNovoLote, setNomeNovoLote] = useState("");
+  const [dataEntrada, setDataEntrada] = useState(new Date().toISOString().slice(0, 10));
+  const [modoValor, setModoValor] = useState("total");
+  const [valorEntrada, setValorEntrada] = useState("");
+  const [precoArroba, setPrecoArroba] = useState("");
+  const [observacoes, setObservacoes] = useState("");
+  const [notaFiscalFile, setNotaFiscalFile] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [recentes, setRecentes] = useState([]);
   const [editandoId, setEditandoId] = useState(null);
   const brincoRef = useRef(null);
 
-  const hoje = new Date().toISOString().slice(0, 10);
   const loteEscolhido = dados.lotes.find((l) => l.id === loteId);
+  const aoLerTag = useCallback((tag) => setBrincoRfid(tag), []);
+  const { lendo } = useRfidScanner(aoLerTag);
+
+  function handleEscolherFornecedor(id) {
+    if (id === "__novo__") {
+      setNovoFornecedor(true);
+      setFornecedorId("");
+      return;
+    }
+    setFornecedorId(id);
+  }
 
   async function handleSalvar() {
-    if (!brinco.trim()) { setErro("Informe o brinco do animal."); return; }
+    const brincoFinal = brinco.trim() || brincoRfid.trim();
+    if (!brincoFinal) { setErro("Informe o brinco visual ou leia o RFID."); return; }
     if (!peso || Number(peso) <= 0) { setErro("Informe o peso individual do animal."); return; }
     setErro("");
     setSalvando(true);
     try {
+      let fornecedorIdFinal = fornecedorId;
+      if (novoFornecedor) {
+        if (!nomeNovoFornecedor.trim()) throw new Error("Informe o nome do novo fornecedor.");
+        const criado = await dados.criarFornecedor({ nome: nomeNovoFornecedor.trim() });
+        fornecedorIdFinal = criado.id;
+        setFornecedorId(criado.id);
+        setNovoFornecedor(false);
+        setNomeNovoFornecedor("");
+      }
+
+      let loteIdFinal = loteId;
+      let loteFinal = loteEscolhido;
+      if (novoLote) {
+        if (!nomeNovoLote.trim()) throw new Error("Informe o nome do novo lote.");
+        const criado = await dados.criarLote({ nome: nomeNovoLote.trim(), situacao: "ativo" });
+        loteIdFinal = criado.id;
+        loteFinal = criado;
+        setLoteId(criado.id);
+        setNovoLote(false);
+        setNomeNovoLote("");
+      }
+
+      const animalEmEdicao = recentes.find((animal) => animal.id === editandoId);
+      let notaFiscalUrl = animalEmEdicao?.nota_fiscal_url || null;
+      if (notaFiscalFile) notaFiscalUrl = await enviarDocumentoRebanho(notaFiscalFile);
+
+      const valorFinal = modoValor === "arroba"
+        ? calcularValorPorArroba(peso, precoArroba)
+        : (valorEntrada === "" ? null : Number(valorEntrada));
       const payload = {
-        brinco_atual: brinco.trim(),
+        brinco_atual: brincoFinal,
+        brinco_rfid: brincoRfid.trim() || null,
+        sexo,
         raca: raca || null,
+        categoria: categoria || null,
+        origem: origem || null,
+        fornecedor_id: fornecedorIdFinal || null,
         peso_entrada: Number(peso),
-        data_entrada: hoje,
-        lote_atual_id: loteId || null,
-        local_atual_id: loteEscolhido?.local_id || null,
+        valor_entrada: valorFinal,
+        data_entrada: dataEntrada,
+        lote_atual_id: loteIdFinal || null,
+        local_atual_id: loteFinal?.local_id || null,
+        observacoes: observacoes || null,
+        nota_fiscal_url: notaFiscalUrl,
       };
       if (editandoId) {
-        const atualizado = await onAtualizar(editandoId, {
-          brinco_atual: payload.brinco_atual,
-          peso_entrada: payload.peso_entrada,
-        });
+        const atualizado = await onAtualizar(editandoId, payload);
         setRecentes((atuais) => atuais.map((animal) => animal.id === editandoId ? atualizado : animal));
         setEditandoId(null);
       } else {
@@ -480,7 +540,10 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
         setRecentes((atuais) => [criado, ...atuais]);
       }
       setBrinco("");
+      setBrincoRfid("");
       setPeso("");
+      setValorEntrada("");
+      setNotaFiscalFile(null);
       requestAnimationFrame(() => brincoRef.current?.focus());
     } catch (err) {
       setErro(err.message);
@@ -493,25 +556,91 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
     <div>
       <BackHeader title="Cadastrar vários animais" onBack={onCancelar} />
       <div style={styles.hardwareHint}>
-        Preencha os dados do grupo uma vez. Após salvar, raça e lote continuam preenchidos; somente brinco e peso ficam em branco para o próximo animal.
+        Mesma ficha do cadastro individual. Após salvar, os dados do grupo permanecem preenchidos; brinco, RFID, peso, valor total e documento ficam prontos para o próximo animal.
+      </div>
+
+      <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
+        <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
+        <div style={{ ...styles.scanBoxText, color: lendo ? "#fff" : "#1F4D45" }}>
+          {lendo ? "Lendo..." : "Aponte o bastão RFID para preencher o brinco eletrônico"}
+        </div>
       </div>
 
       <div style={styles.card}>
-        <InputField label="Brinco do animal" value={brinco} onChange={setBrinco} inputRef={brincoRef} placeholder="Ex: 1245" />
+        <InputField label="Brinco visual" value={brinco} onChange={setBrinco} inputRef={brincoRef} placeholder="Número do brinco" />
+        <InputField label="Brinco RFID (eletrônico)" value={brincoRfid} onChange={setBrincoRfid} placeholder="Lido pelo bastão, ou digite" />
         <InputField label="Peso individual (kg)" type="number" value={peso} onChange={setPeso} placeholder="0" />
+        <SelectField label="Sexo" value={sexo} onChange={setSexo} options={[{ value: "femea", label: "Fêmea" }, { value: "macho", label: "Macho" }]} />
         <SelectField
           label="Raça"
           value={raca}
           onChange={setRaca}
           options={[{ value: "", label: "Selecione..." }, ...RACAS.map((nome) => ({ value: nome, label: nome }))]}
         />
-        <SelectField
-          label="Lote"
-          value={loteId}
-          onChange={setLoteId}
-          options={[{ value: "", label: "Sem lote definido" }, ...dados.lotes.map((l) => ({ value: l.id, label: l.nome }))]}
-        />
-        <Field label="Data de entrada" value={`${formatDataBR(hoje)} (data de hoje, do cadastro no curral)`} />
+        <InputField label="Categoria" value={categoria} onChange={setCategoria} placeholder="Ex: Bezerro, Novilha, Boi" />
+        <InputField label="Origem" value={origem} onChange={setOrigem} placeholder="De onde vieram os animais" />
+
+        {!novoFornecedor ? (
+          <SelectField
+            label="Fornecedor"
+            value={fornecedorId}
+            onChange={handleEscolherFornecedor}
+            options={[
+              { value: "", label: "Sem fornecedor" },
+              ...dados.fornecedores.map((f) => ({ value: f.id, label: f.nome })),
+              { value: "__novo__", label: "+ Cadastrar novo fornecedor" },
+            ]}
+          />
+        ) : (
+          <InputField label="Nome do novo fornecedor" value={nomeNovoFornecedor} onChange={setNomeNovoFornecedor} placeholder="Ex: Fazenda São José" />
+        )}
+
+        {!novoLote ? (
+          <SelectField
+            label="Lote"
+            value={loteId}
+            onChange={(id) => {
+              if (id === "__novo__") {
+                setNovoLote(true);
+                setLoteId("");
+              } else {
+                setLoteId(id);
+              }
+            }}
+            options={[
+              { value: "", label: "Sem lote definido" },
+              ...dados.lotes.map((l) => ({ value: l.id, label: l.nome })),
+              { value: "__novo__", label: "+ Criar novo lote" },
+            ]}
+          />
+        ) : (
+          <InputField label="Nome do novo lote" value={nomeNovoLote} onChange={setNomeNovoLote} placeholder="Ex: Recria Águas 04" />
+        )}
+
+        <InputField label="Data de entrada" type="date" value={dataEntrada} onChange={setDataEntrada} />
+
+        <div style={styles.viewToggle}>
+          <button type="button" onClick={() => setModoValor("total")} style={modoValor === "total" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Valor total</button>
+          <button type="button" onClick={() => setModoValor("arroba")} style={modoValor === "arroba" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Preço da arroba</button>
+        </div>
+        {modoValor === "total" ? (
+          <InputField label="Valor de entrada (R$)" type="number" value={valorEntrada} onChange={setValorEntrada} placeholder="0,00" />
+        ) : (
+          <>
+            <InputField label="Preço da arroba (R$)" type="number" value={precoArroba} onChange={setPrecoArroba} placeholder="0,00" />
+            <div style={styles.hardwareHint}>
+              {peso === "" || precoArroba === ""
+                ? "Informe o peso e o preço da arroba para calcular o valor."
+                : `Valor calculado: ${formatBRL(calcularValorPorArroba(peso, precoArroba))}`}
+            </div>
+          </>
+        )}
+
+        <TextAreaField label="Observações" value={observacoes} onChange={setObservacoes} placeholder="Opcional" />
+        <label style={styles.field}>
+          <div style={styles.fieldLabel}>Nota fiscal (opcional)</div>
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setNotaFiscalFile(e.target.files?.[0] || null)} />
+        </label>
       </div>
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
@@ -535,7 +664,18 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
                   onClick={() => {
                     setEditandoId(animal.id);
                     setBrinco(animal.brinco_atual || "");
+                    setBrincoRfid(animal.brinco_rfid || "");
                     setPeso(animal.peso_entrada ?? "");
+                    setSexo(animal.sexo || "femea");
+                    setRaca(animal.raca || "");
+                    setCategoria(animal.categoria || "");
+                    setOrigem(animal.origem || "");
+                    setFornecedorId(animal.fornecedor_id || "");
+                    setLoteId(animal.lote_atual_id || "");
+                    setDataEntrada(animal.data_entrada || new Date().toISOString().slice(0, 10));
+                    setModoValor("total");
+                    setValorEntrada(animal.valor_entrada ?? "");
+                    setObservacoes(animal.observacoes || "");
                     requestAnimationFrame(() => brincoRef.current?.focus());
                   }}
                 >
