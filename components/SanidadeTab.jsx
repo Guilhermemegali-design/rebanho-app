@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Radio, Syringe, Trash2 } from "lucide-react";
+import { Radio, Syringe, Trash2, Pencil } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = { vacina: "Vacinação", vermifugo: "Vermifugação", diagnostico: "Diagnóstico", tratamento: "Tratamento" };
@@ -12,6 +12,7 @@ const TIPOS = { vacina: "Vacinação", vermifugo: "Vermifugação", diagnostico:
 export default function SanidadeTab({ dados }) {
   const [modo, setModo] = useState("lista");
   const [excluindo, setExcluindo] = useState(null);
+  const [procedimentoEditando, setProcedimentoEditando] = useState(null);
 
   const recentes = useMemo(
     () => [...dados.procedimentos].sort((a, b) => (b.data_aplicacao || "").localeCompare(a.data_aplicacao || "")).slice(0, 30),
@@ -20,6 +21,16 @@ export default function SanidadeTab({ dados }) {
 
   if (modo === "novo") {
     return <FormProcedimento dados={dados} onSalvo={() => setModo("lista")} onCancelar={() => setModo("lista")} />;
+  }
+  if (modo === "editar" && procedimentoEditando) {
+    return (
+      <FormProcedimento
+        dados={dados}
+        inicial={procedimentoEditando}
+        onSalvo={() => { setProcedimentoEditando(null); setModo("lista"); }}
+        onCancelar={() => { setProcedimentoEditando(null); setModo("lista"); }}
+      />
+    );
   }
 
   async function handleExcluir(procedimento, animal) {
@@ -69,6 +80,15 @@ export default function SanidadeTab({ dados }) {
             </div>
             <button
               type="button"
+              onClick={() => { setProcedimentoEditando(p); setModo("editar"); }}
+              aria-label={p.grupo_lancamento ? "Editar manejo do lote inteiro" : "Editar manejo sanitário"}
+              title={p.grupo_lancamento ? "Editar lote inteiro" : "Editar manejo"}
+              style={styles.iconEditBtn}
+            >
+              <Pencil size={15} />
+            </button>
+            <button
+              type="button"
               onClick={() => handleExcluir(p, animal)}
               disabled={excluindo === (p.grupo_lancamento || p.id || p.client_uuid)}
               aria-label={p.grupo_lancamento ? "Excluir manejo do lote inteiro" : "Excluir manejo sanitário"}
@@ -90,17 +110,17 @@ function diasRestantesCarencia(p) {
   return Math.round((fim - new Date()) / 86400000);
 }
 
-function FormProcedimento({ dados, onSalvo, onCancelar }) {
-  const [alcance, setAlcance] = useState("animal");
-  const [animalId, setAnimalId] = useState("");
-  const [loteId, setLoteId] = useState("");
-  const [tipo, setTipo] = useState("vacina");
-  const [medicamentoId, setMedicamentoId] = useState("");
-  const [dose, setDose] = useState("");
-  const [dataAplicacao, setDataAplicacao] = useState(new Date().toISOString().slice(0, 10));
-  const [proximaAplicacao, setProximaAplicacao] = useState("");
-  const [carenciaDias, setCarenciaDias] = useState("0");
-  const [observacoes, setObservacoes] = useState("");
+function FormProcedimento({ dados, onSalvo, onCancelar, inicial }) {
+  const [alcance, setAlcance] = useState(inicial?.grupo_lancamento ? "lote" : "animal");
+  const [animalId, setAnimalId] = useState(inicial?.animal_id || "");
+  const [loteId, setLoteId] = useState(inicial?.lote_lancamento_id || "");
+  const [tipo, setTipo] = useState(inicial?.tipo || "vacina");
+  const [medicamentoId, setMedicamentoId] = useState(inicial?.medicamento_id || "");
+  const [dose, setDose] = useState(inicial?.dose || "");
+  const [dataAplicacao, setDataAplicacao] = useState(inicial?.data_aplicacao || new Date().toISOString().slice(0, 10));
+  const [proximaAplicacao, setProximaAplicacao] = useState(inicial?.proxima_aplicacao || "");
+  const [carenciaDias, setCarenciaDias] = useState(String(inicial?.carencia_dias ?? 0));
+  const [observacoes, setObservacoes] = useState(inicial?.observacoes || "");
   const [novoMedicamento, setNovoMedicamento] = useState(false);
   const [nomeNovoMedicamento, setNomeNovoMedicamento] = useState("");
   const [erro, setErro] = useState("");
@@ -128,10 +148,10 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
   }
 
   async function handleSalvar() {
-    if (alcance === "animal" && !animalId) { setErro("Escolha o animal (ou aponte o bastão RFID)."); return; }
+    if (!inicial && alcance === "animal" && !animalId) { setErro("Escolha o animal (ou aponte o bastão RFID)."); return; }
     const animaisDoLote = dados.animais.filter((animal) => animal.lote_atual_id === loteId && animal.situacao === "ativo");
-    if (alcance === "lote" && !loteId) { setErro("Escolha o lote."); return; }
-    if (alcance === "lote" && animaisDoLote.length === 0) { setErro("Este lote não possui animais ativos."); return; }
+    if (!inicial && alcance === "lote" && !loteId) { setErro("Escolha o lote."); return; }
+    if (!inicial && alcance === "lote" && animaisDoLote.length === 0) { setErro("Este lote não possui animais ativos."); return; }
     setErro("");
     setSalvando(true);
     try {
@@ -149,7 +169,11 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
         carencia_dias: Number(carenciaDias) || 0,
         observacoes: observacoes || null,
       };
-      if (alcance === "lote") {
+      if (inicial?.grupo_lancamento) {
+        await dados.atualizarProcedimentosEmGrupo(inicial.grupo_lancamento, procedimento);
+      } else if (inicial) {
+        await dados.atualizarProcedimento(inicial, procedimento);
+      } else if (alcance === "lote") {
         await dados.registrarProcedimentosEmLote(animaisDoLote.map((animal) => animal.id), procedimento, loteId);
       } else {
         await dados.registrarProcedimento(animalId, procedimento);
@@ -164,12 +188,12 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
 
   return (
     <div>
-      <BackHeader title="Registrar procedimento" onBack={onCancelar} />
+      <BackHeader title={inicial ? "Editar manejo sanitário" : "Registrar procedimento"} onBack={onCancelar} />
 
-      <div style={styles.viewToggle}>
+      {!inicial && <div style={styles.viewToggle}>
         <button type="button" onClick={() => setAlcance("animal")} style={alcance === "animal" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Um animal</button>
         <button type="button" onClick={() => setAlcance("lote")} style={alcance === "lote" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Lote inteiro</button>
-      </div>
+      </div>}
 
       {alcance === "animal" && (
         <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
@@ -230,7 +254,7 @@ function FormProcedimento({ dados, onSalvo, onCancelar }) {
       {erro && <div style={styles.errorBox}>{erro}</div>}
       <div style={styles.offlineNotice}>Sem sinal no curral? Sem problema — fica salvo no aparelho e envia sozinho quando a internet voltar.</div>
       <PrimaryButton onClick={handleSalvar} disabled={salvando}>
-        {salvando ? "Salvando..." : alcance === "lote" ? "Registrar para o lote inteiro" : "Registrar"}
+        {salvando ? "Salvando..." : inicial ? "Salvar alterações" : alcance === "lote" ? "Registrar para o lote inteiro" : "Registrar"}
       </PrimaryButton>
     </div>
   );

@@ -254,6 +254,15 @@ create policy "cliente_registra_movimentacao" on rebanho_movimentacoes
     animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
   );
 
+create policy "cliente_edita_movimentacao" on rebanho_movimentacoes
+  for update to authenticated
+  using (
+    animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = (select auth.uid())))
+  )
+  with check (
+    animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = (select auth.uid())))
+  );
+
 create policy "cliente_exclui_movimentacao" on rebanho_movimentacoes
   for delete to authenticated
   using (
@@ -300,6 +309,15 @@ create policy "cliente_ve_pesagens_animal" on rebanho_pesagens
 create policy "cliente_registra_pesagem_animal" on rebanho_pesagens
   for insert with check (
     animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
+  );
+
+create policy "cliente_edita_pesagem_animal" on rebanho_pesagens
+  for update to authenticated
+  using (
+    animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = (select auth.uid())))
+  )
+  with check (
+    animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = (select auth.uid())))
   );
 
 create policy "cliente_exclui_pesagem_animal" on rebanho_pesagens
@@ -375,6 +393,15 @@ create policy "cliente_ve_procedimentos" on rebanho_procedimentos_sanitarios
 create policy "cliente_registra_procedimento" on rebanho_procedimentos_sanitarios
   for insert with check (
     animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
+  );
+
+create policy "cliente_edita_procedimento" on rebanho_procedimentos_sanitarios
+  for update to authenticated
+  using (
+    animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = (select auth.uid())))
+  )
+  with check (
+    animal_id in (select a.id from rebanho_animais a where a.cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = (select auth.uid())))
   );
 
 create policy "cliente_exclui_procedimento" on rebanho_procedimentos_sanitarios

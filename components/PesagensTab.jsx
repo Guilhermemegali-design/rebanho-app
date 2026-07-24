@@ -5,12 +5,13 @@ import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, calcularGmd } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { useBluetoothScale } from "@/lib/bluetoothScale";
-import { Radio, Bluetooth, BluetoothConnected, Scale, Search, Trash2 } from "lucide-react";
+import { Radio, Bluetooth, BluetoothConnected, Scale, Search, Trash2, Pencil } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, InputField, PrimaryButton } from "@/components/UI";
 
 export default function PesagensTab({ dados }) {
   const [modo, setModo] = useState("lista");
   const [excluindoId, setExcluindoId] = useState(null);
+  const [pesagemEditando, setPesagemEditando] = useState(null);
 
   async function excluirPesagem(pesagem, animal) {
     const identificacao = animal?.brinco_atual || "sem identificação";
@@ -34,6 +35,20 @@ export default function PesagensTab({ dados }) {
   if (modo === "nova") {
     return <FormPesagem dados={dados} onSalvo={() => setModo("lista")} onCancelar={() => setModo("lista")} />;
   }
+  if (modo === "editar" && pesagemEditando) {
+    return (
+      <FormPesagem
+        dados={dados}
+        inicial={pesagemEditando}
+        onSalvo={async (payload) => {
+          await dados.atualizarPesagem(pesagemEditando, payload);
+          setPesagemEditando(null);
+          setModo("lista");
+        }}
+        onCancelar={() => { setPesagemEditando(null); setModo("lista"); }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -53,6 +68,15 @@ export default function PesagensTab({ dados }) {
             </div>
             <button
               type="button"
+              onClick={() => { setPesagemEditando(p); setModo("editar"); }}
+              aria-label={`Editar pesagem do animal ${animal?.brinco_atual || ""}`}
+              title="Editar pesagem"
+              style={styles.iconEditBtn}
+            >
+              <Pencil size={15} />
+            </button>
+            <button
+              type="button"
               onClick={() => excluirPesagem(p, animal)}
               disabled={excluindoId === (p.id || p.client_uuid)}
               aria-label={`Excluir pesagem do animal ${animal?.brinco_atual || ""}`}
@@ -68,12 +92,13 @@ export default function PesagensTab({ dados }) {
   );
 }
 
-function FormPesagem({ dados, onSalvo, onCancelar }) {
-  const [animalId, setAnimalId] = useState("");
-  const [brincoDigitado, setBrincoDigitado] = useState("");
-  const [peso, setPeso] = useState("");
-  const [origemPeso, setOrigemPeso] = useState("manual");
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+function FormPesagem({ dados, onSalvo, onCancelar, inicial }) {
+  const animalInicial = inicial ? dados.animais.find((animal) => animal.id === inicial.animal_id) : null;
+  const [animalId, setAnimalId] = useState(inicial?.animal_id || "");
+  const [brincoDigitado, setBrincoDigitado] = useState(animalInicial?.brinco_atual || "");
+  const [peso, setPeso] = useState(inicial?.peso ?? "");
+  const [origemPeso, setOrigemPeso] = useState(inicial?.origem_peso || "manual");
+  const [data, setData] = useState(inicial?.data || new Date().toISOString().slice(0, 10));
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -160,13 +185,17 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
     setErro("");
     setSalvando(true);
     try {
-      await dados.registrarPesagem(animalId, {
+      const payload = {
         peso: Number(peso),
         data,
         origem_peso: origemPeso,
         dispositivo: origemPeso === "bluetooth" ? escala.dispositivo : null,
-      });
-      onSalvo();
+      };
+      if (inicial) await onSalvo(payload);
+      else {
+        await dados.registrarPesagem(animalId, payload);
+        onSalvo();
+      }
     } catch (err) {
       setErro(err.message);
     } finally {
@@ -176,7 +205,7 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
 
   return (
     <div>
-      <BackHeader title="Pesar animal" onBack={onCancelar} />
+      <BackHeader title={inicial ? "Editar pesagem" : "Pesar animal"} onBack={onCancelar} />
 
       <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
         <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
@@ -289,7 +318,7 @@ function FormPesagem({ dados, onSalvo, onCancelar }) {
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
       <div style={styles.offlineNotice}>Sem sinal no curral? Sem problema — fica salvo no aparelho e envia sozinho quando a internet voltar.</div>
-      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Registrar pesagem"}</PrimaryButton>
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : inicial ? "Salvar alterações" : "Registrar pesagem"}</PrimaryButton>
     </div>
   );
 }

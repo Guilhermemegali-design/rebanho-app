@@ -6,7 +6,7 @@ import { formatDataBR, formatKg, formatBRL, calcularGmd, calcularValorPorArroba 
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { statusAnimal } from "@/lib/alerts";
 import { enviarDocumentoRebanho } from "@/lib/storage";
-import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, ArrowLeftRight, Syringe, Trash2 } from "lucide-react";
+import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, ArrowLeftRight, Syringe, Trash2, Pencil } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const SITUACOES = { ativo: "Ativo", vendido: "Vendido", morto: "Morto", transferido: "Transferido" };
@@ -115,6 +115,21 @@ export default function AnimaisTab({ dados }) {
     );
   }
 
+  if (modo === "editar" && animalSelecionado) {
+    return (
+      <FormAnimal
+        dados={dados}
+        inicial={dados.animais.find((animal) => animal.id === animalSelecionado.id) || animalSelecionado}
+        onSalvar={async (payload) => {
+          await dados.atualizarAnimal(animalSelecionado.id, payload);
+          setAnimalSelecionado(null);
+          setModo("lista");
+        }}
+        onCancelar={() => { setAnimalSelecionado(null); setModo("lista"); }}
+      />
+    );
+  }
+
   if (modo === "detalhe" && animalSelecionado) {
     return (
       <FichaAnimal
@@ -211,6 +226,19 @@ export default function AnimaisTab({ dados }) {
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
+                            setAnimalSelecionado(a);
+                            setModo("editar");
+                          }}
+                          aria-label={`Editar animal ${a.brinco_atual}`}
+                          title="Editar animal"
+                          style={{ ...styles.iconEditBtn, marginRight: 8 }}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
                             excluirDireto(a);
                           }}
                           disabled={excluindoId === a.id}
@@ -250,6 +278,15 @@ export default function AnimaisTab({ dados }) {
                   </div>
                 </button>
                 <span style={{ ...styles.statusBadge, ...STATUS_BADGE_STYLE[status.cor] }}>{status.rotulo}</span>
+                <button
+                  type="button"
+                  onClick={() => { setAnimalSelecionado(a); setModo("editar"); }}
+                  aria-label={`Editar animal ${a.brinco_atual}`}
+                  title="Editar animal"
+                  style={{ ...styles.iconEditBtn, marginLeft: 8 }}
+                >
+                  <Pencil size={15} />
+                </button>
                 <button
                   type="button"
                   onClick={() => excluirDireto(a)}
@@ -793,6 +830,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
 function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
   const [editando, setEditando] = useState(false);
   const [excluindoTimeline, setExcluindoTimeline] = useState(null);
+  const [itemTimelineEditando, setItemTimelineEditando] = useState(null);
 
   const lote = dados.lotes.find((l) => l.id === animal.lote_atual_id);
   const local = dados.locais.find((l) => l.id === animal.local_atual_id);
@@ -848,6 +886,17 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
           setEditando(false);
         }}
         onCancelar={() => setEditando(false)}
+      />
+    );
+  }
+
+  if (itemTimelineEditando) {
+    return (
+      <FormEditarTimeline
+        dados={dados}
+        item={itemTimelineEditando}
+        onCancelar={() => setItemTimelineEditando(null)}
+        onSalvo={() => setItemTimelineEditando(null)}
       />
     );
   }
@@ -914,6 +963,15 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
               </div>
               <button
                 type="button"
+                onClick={() => setItemTimelineEditando(item)}
+                aria-label={`Editar ${item.titulo}`}
+                title="Editar informação"
+                style={{ ...styles.iconEditBtn, marginLeft: 8 }}
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                type="button"
                 onClick={() => excluirItemTimeline(item)}
                 disabled={excluindoTimeline === item.id}
                 aria-label={`Excluir ${item.titulo}`}
@@ -926,6 +984,98 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function FormEditarTimeline({ dados, item, onCancelar, onSalvo }) {
+  const registro = item.registro;
+  const [data, setData] = useState(item.data || "");
+  const [peso, setPeso] = useState(registro.peso ?? "");
+  const [loteDestinoId, setLoteDestinoId] = useState(registro.lote_destino_id || "");
+  const [localDestinoId, setLocalDestinoId] = useState(registro.local_destino_id || "");
+  const [tipoSanidade, setTipoSanidade] = useState(registro.tipo || "vacina");
+  const [medicamentoId, setMedicamentoId] = useState(registro.medicamento_id || "");
+  const [dose, setDose] = useState(registro.dose || "");
+  const [proximaAplicacao, setProximaAplicacao] = useState(registro.proxima_aplicacao || "");
+  const [carenciaDias, setCarenciaDias] = useState(String(registro.carencia_dias ?? 0));
+  const [observacoes, setObservacoes] = useState(registro.observacoes || "");
+  const [erro, setErro] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  async function handleSalvar() {
+    setSalvando(true);
+    setErro("");
+    try {
+      if (item.tipo === "pesagem") {
+        if (!peso || Number(peso) <= 0) throw new Error("Informe um peso válido.");
+        await dados.atualizarPesagem(registro, { peso: Number(peso), data });
+      } else if (item.tipo === "movimentacao") {
+        const mudancas = { data, observacoes: observacoes || null };
+        if (registro.tipo === "transferencia_lote" || registro.tipo === "entrada") mudancas.lote_destino_id = loteDestinoId || null;
+        if (registro.tipo === "transferencia_local" || registro.tipo === "entrada") mudancas.local_destino_id = localDestinoId || null;
+        await dados.atualizarMovimentacao(registro, mudancas);
+      } else {
+        const mudancas = {
+          tipo: tipoSanidade,
+          medicamento_id: medicamentoId || null,
+          dose: dose || null,
+          data_aplicacao: data,
+          proxima_aplicacao: proximaAplicacao || null,
+          carencia_dias: Number(carenciaDias) || 0,
+          observacoes: observacoes || null,
+        };
+        if (registro.grupo_lancamento) await dados.atualizarProcedimentosEmGrupo(registro.grupo_lancamento, mudancas);
+        else await dados.atualizarProcedimento(registro, mudancas);
+      }
+      onSalvo();
+    } catch (err) {
+      setErro(err.message || "Não foi possível salvar as alterações.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div>
+      <BackHeader title={`Editar ${item.titulo}`} onBack={onCancelar} />
+      <div style={styles.card}>
+        {item.tipo === "pesagem" && <InputField label="Peso (kg)" type="number" value={peso} onChange={setPeso} />}
+        {item.tipo === "sanidade" && (
+          <>
+            <SelectField label="Tipo" value={tipoSanidade} onChange={setTipoSanidade} options={[
+              { value: "vacina", label: "Vacinação" },
+              { value: "vermifugo", label: "Vermifugação" },
+              { value: "diagnostico", label: "Diagnóstico" },
+              { value: "tratamento", label: "Tratamento" },
+            ]} />
+            <SelectField label="Medicamento" value={medicamentoId} onChange={setMedicamentoId} options={[
+              { value: "", label: "Sem medicamento" },
+              ...dados.medicamentos.map((medicamento) => ({ value: medicamento.id, label: medicamento.nome })),
+            ]} />
+            <InputField label="Dose" value={dose} onChange={setDose} />
+            <InputField label="Próxima aplicação" type="date" value={proximaAplicacao} onChange={setProximaAplicacao} />
+            <InputField label="Carência (dias)" type="number" value={carenciaDias} onChange={setCarenciaDias} />
+          </>
+        )}
+        {item.tipo === "movimentacao" && (registro.tipo === "transferencia_lote" || registro.tipo === "entrada") && (
+          <SelectField label="Lote de destino" value={loteDestinoId} onChange={setLoteDestinoId} options={[
+            { value: "", label: "Sem lote" },
+            ...dados.lotes.map((lote) => ({ value: lote.id, label: lote.nome })),
+          ]} />
+        )}
+        {item.tipo === "movimentacao" && (registro.tipo === "transferencia_local" || registro.tipo === "entrada") && (
+          <SelectField label="Local de destino" value={localDestinoId} onChange={setLocalDestinoId} options={[
+            { value: "", label: "Sem local" },
+            ...dados.locais.map((local) => ({ value: local.id, label: local.nome })),
+          ]} />
+        )}
+        <InputField label={item.tipo === "sanidade" ? "Data de aplicação" : "Data"} type="date" value={data} onChange={setData} />
+        {item.tipo !== "pesagem" && <TextAreaField label="Observações" value={observacoes} onChange={setObservacoes} placeholder="Opcional" />}
+      </div>
+      {registro.grupo_lancamento && <div style={styles.offlineNotice}>Esta alteração será aplicada a todo o manejo lançado em lote.</div>}
+      {erro && <div style={styles.errorBox}>{erro}</div>}
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar alterações"}</PrimaryButton>
     </div>
   );
 }

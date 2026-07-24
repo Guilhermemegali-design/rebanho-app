@@ -167,6 +167,9 @@ operador aos animais da própria fazenda.
   local de origem.
 - Locais e lotes podem ser editados diretamente nas listas. Locais também
   podem ser excluídos sem apagar animais ou lotes vinculados.
+- O botão de editar acompanha o botão de excluir em animais, pesagens,
+  sanidade, transferências e itens da linha do tempo. Registros offline
+  são atualizados na fila local e manejos coletivos são editados em grupo.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 

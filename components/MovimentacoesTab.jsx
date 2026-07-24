@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Radio, ArrowLeftRight, Trash2 } from "lucide-react";
+import { Radio, ArrowLeftRight, Trash2, Pencil } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = {
@@ -19,6 +19,7 @@ const TIPOS = {
 export default function MovimentacoesTab({ dados }) {
   const [modo, setModo] = useState("lista");
   const [excluindoId, setExcluindoId] = useState(null);
+  const [movimentacaoEditando, setMovimentacaoEditando] = useState(null);
 
   async function excluirTransferencia(movimentacao, animal) {
     if (!window.confirm(`Excluir a ${TIPOS[movimentacao.tipo].toLowerCase()} do animal ${animal?.brinco_atual || "selecionado"}, em ${formatDataBR(movimentacao.data)}?`)) return;
@@ -41,6 +42,16 @@ export default function MovimentacoesTab({ dados }) {
   if (modo === "nova") {
     return <FormMovimentacao dados={dados} onSalvo={() => setModo("lista")} onCancelar={() => setModo("lista")} />;
   }
+  if (modo === "editar" && movimentacaoEditando) {
+    return (
+      <FormMovimentacao
+        dados={dados}
+        inicial={movimentacaoEditando}
+        onSalvo={() => { setMovimentacaoEditando(null); setModo("lista"); }}
+        onCancelar={() => { setMovimentacaoEditando(null); setModo("lista"); }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -61,16 +72,27 @@ export default function MovimentacoesTab({ dados }) {
               </div>
             </div>
             {(m.tipo === "transferencia_lote" || m.tipo === "transferencia_local") && (
-              <button
-                type="button"
-                onClick={() => excluirTransferencia(m, animal)}
-                disabled={excluindoId === (m.id || m.client_uuid)}
-                aria-label={`Excluir ${TIPOS[m.tipo].toLowerCase()}`}
-                title="Excluir transferência"
-                style={{ ...styles.iconDangerBtn, opacity: excluindoId === (m.id || m.client_uuid) ? 0.5 : 1 }}
-              >
-                <Trash2 size={16} />
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setMovimentacaoEditando(m); setModo("editar"); }}
+                  aria-label={`Editar ${TIPOS[m.tipo].toLowerCase()}`}
+                  title="Editar transferência"
+                  style={styles.iconEditBtn}
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => excluirTransferencia(m, animal)}
+                  disabled={excluindoId === (m.id || m.client_uuid)}
+                  aria-label={`Excluir ${TIPOS[m.tipo].toLowerCase()}`}
+                  title="Excluir transferência"
+                  style={{ ...styles.iconDangerBtn, opacity: excluindoId === (m.id || m.client_uuid) ? 0.5 : 1 }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
             )}
           </div>
         );
@@ -79,15 +101,15 @@ export default function MovimentacoesTab({ dados }) {
   );
 }
 
-function FormMovimentacao({ dados, onSalvo, onCancelar }) {
-  const [animalId, setAnimalId] = useState("");
+function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
+  const [animalId, setAnimalId] = useState(inicial?.animal_id || "");
   const [animaisVenda, setAnimaisVenda] = useState([]);
   const [pesosSaida, setPesosSaida] = useState({});
-  const [tipo, setTipo] = useState("transferencia_lote");
-  const [loteDestinoId, setLoteDestinoId] = useState("");
-  const [localDestinoId, setLocalDestinoId] = useState("");
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
-  const [observacoes, setObservacoes] = useState("");
+  const [tipo, setTipo] = useState(inicial?.tipo || "transferencia_lote");
+  const [loteDestinoId, setLoteDestinoId] = useState(inicial?.lote_destino_id || "");
+  const [localDestinoId, setLocalDestinoId] = useState(inicial?.local_destino_id || "");
+  const [data, setData] = useState(inicial?.data || new Date().toISOString().slice(0, 10));
+  const [observacoes, setObservacoes] = useState(inicial?.observacoes || "");
   const [precoArroba, setPrecoArroba] = useState("");
   const [rendimentoCarcaca, setRendimentoCarcaca] = useState("");
   const [erro, setErro] = useState("");
@@ -137,7 +159,9 @@ function FormMovimentacao({ dados, onSalvo, onCancelar }) {
         }
         return { animalId: id, dados: payload };
       });
-      if (tipo === "venda" && dados.registrarMovimentacoesEmLote) {
+      if (inicial) {
+        await dados.atualizarMovimentacao(inicial, registros[0].dados);
+      } else if (tipo === "venda" && dados.registrarMovimentacoesEmLote) {
         await dados.registrarMovimentacoesEmLote(registros);
       } else {
         await Promise.all(registros.map((registro) => dados.registrarMovimentacao(registro.animalId, registro.dados)));
@@ -152,7 +176,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar }) {
 
   return (
     <div>
-      <BackHeader title="Registrar movimentação" onBack={onCancelar} />
+      <BackHeader title={inicial ? "Editar transferência" : "Registrar movimentação"} onBack={onCancelar} />
 
       <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
         <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
@@ -162,7 +186,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar }) {
       </div>
 
       <div style={styles.card}>
-        <SelectField label="Tipo" value={tipo} onChange={setTipo} options={Object.entries(TIPOS).map(([value, label]) => ({ value, label }))} />
+        {!inicial && <SelectField label="Tipo" value={tipo} onChange={setTipo} options={Object.entries(TIPOS).map(([value, label]) => ({ value, label }))} />}
         {tipo !== "venda" && (
           <SelectField
             label="Animal"
@@ -233,7 +257,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar }) {
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
       <div style={styles.offlineNotice}>Sem sinal no curral? Sem problema — fica salvo no aparelho e envia sozinho quando a internet voltar.</div>
-      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Registrar"}</PrimaryButton>
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : inicial ? "Salvar alterações" : "Registrar"}</PrimaryButton>
     </div>
   );
 }
