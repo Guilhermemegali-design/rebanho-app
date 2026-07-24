@@ -76,6 +76,30 @@ export default function AnimaisTab({ dados }) {
     );
   }
 
+  if (modo === "lote") {
+    return (
+      <FormAnimaisEmLote
+        dados={dados}
+        onSalvar={async (registros, loteId, local_atual_id) => {
+          const criados = await dados.criarAnimaisEmLote(registros);
+          if (loteId) {
+            for (const criado of criados) {
+              await dados.registrarMovimentacao(criado.id, {
+                tipo: "entrada",
+                lote_destino_id: loteId,
+                local_destino_id: local_atual_id || null,
+                data: criado.data_entrada,
+                observacoes: "Entrada em lote (cadastro múltiplo)",
+              });
+            }
+          }
+          return criados;
+        }}
+        onCancelar={() => setModo("lista")}
+      />
+    );
+  }
+
   if (modo === "detalhe" && animalSelecionado) {
     return (
       <FichaAnimal
@@ -94,6 +118,10 @@ export default function AnimaisTab({ dados }) {
         actionLabel="Novo animal"
         onAction={() => setModo("novo")}
       />
+
+      <button onClick={() => setModo("lote")} style={{ ...styles.linkBtn, width: "auto", marginTop: -10, marginBottom: 14, textAlign: "left" }}>
+        Cadastrar vários animais de uma vez (entrada em lote)
+      </button>
 
       <div style={styles.hardwareHint}>Pode apontar o bastão RFID aqui pra ir direto na ficha do animal.</div>
       {avisoScan && <div style={{ ...styles.errorBox, marginTop: 10, marginBottom: 10 }}>{avisoScan}</div>}
@@ -361,6 +389,108 @@ function FormAnimal({ dados, onSalvar, onCancelar, inicial }) {
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
       <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar animal"}</PrimaryButton>
+    </div>
+  );
+}
+
+// ---------- Cadastro em lote (vários animais de uma vez, ex: caminhão
+// chegando no curral, ainda sem brinco individual definido) ----------
+function gerarPrefixoLote(loteNome) {
+  if (!loteNome) return "ENTRADA";
+  const limpo = loteNome
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase()
+    .slice(0, 12);
+  return limpo || "ENTRADA";
+}
+
+function FormAnimaisEmLote({ dados, onSalvar, onCancelar }) {
+  const [quantidade, setQuantidade] = useState("");
+  const [peso, setPeso] = useState("");
+  const [raca, setRaca] = useState("");
+  const [loteId, setLoteId] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [resultado, setResultado] = useState(null);
+
+  const hoje = new Date().toISOString().slice(0, 10);
+  const loteEscolhido = dados.lotes.find((l) => l.id === loteId);
+
+  async function handleSalvar() {
+    const qtd = Number(quantidade);
+    if (!qtd || qtd < 1) {
+      setErro("Informe quantos animais entraram.");
+      return;
+    }
+    if (qtd > 500) {
+      setErro("No máximo 500 animais por vez — divida em mais de uma entrada.");
+      return;
+    }
+    setErro("");
+    setSalvando(true);
+    try {
+      const prefixo = gerarPrefixoLote(loteEscolhido?.nome);
+      const dataCompacta = hoje.slice(2).replace(/-/g, "");
+      const registros = Array.from({ length: qtd }, (_, i) => ({
+        brinco_atual: `${prefixo}-${dataCompacta}-${String(i + 1).padStart(2, "0")}`,
+        raca: raca || null,
+        peso_entrada: peso === "" ? null : Number(peso),
+        data_entrada: hoje,
+        lote_atual_id: loteId || null,
+        local_atual_id: loteEscolhido?.local_id || null,
+      }));
+      const criados = await onSalvar(registros, loteId || null, loteEscolhido?.local_id || null);
+      setResultado({ primeiro: registros[0].brinco_atual, ultimo: registros[registros.length - 1].brinco_atual, total: criados.length });
+    } catch (err) {
+      setErro(err.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (resultado) {
+    return (
+      <div>
+        <BackHeader title="Entrada em lote" onBack={onCancelar} />
+        <div style={{ ...styles.alertaCard, background: "#E4EFE9", border: "1px solid #CDE3D9" }}>
+          <div>
+            <div style={{ ...styles.alertaTitulo, color: "#1F4D45" }}>{resultado.total} animal(is) cadastrado(s) com sucesso.</div>
+            <div style={styles.alertaSub}>
+              Identificação temporária de {resultado.primeiro} até {resultado.ultimo}. Edite cada animal (ou aponte o bastão RFID na ficha dele) para colocar o brinco real assim que tagueado.
+            </div>
+          </div>
+        </div>
+        <PrimaryButton onClick={onCancelar}>Voltar para a lista</PrimaryButton>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <BackHeader title="Entrada em lote" onBack={onCancelar} />
+      <div style={styles.hardwareHint}>
+        Use quando vários animais entram juntos no curral, ainda sem brinco individual. Cada um recebe uma identificação
+        temporária (ex: {gerarPrefixoLote(loteEscolhido?.nome)}-{hoje.slice(2).replace(/-/g, "")}-01) — edite depois com o brinco
+        real ou aponte o bastão RFID na ficha de cada animal.
+      </div>
+
+      <div style={styles.card}>
+        <InputField label="Quantidade de animais" type="number" value={quantidade} onChange={setQuantidade} placeholder="Ex: 20" />
+        <InputField label="Peso de entrada (kg) — aplicado a todos" type="number" value={peso} onChange={setPeso} placeholder="0" />
+        <InputField label="Raça" value={raca} onChange={setRaca} placeholder="Ex: Nelore" />
+        <SelectField
+          label="Lote"
+          value={loteId}
+          onChange={setLoteId}
+          options={[{ value: "", label: "Sem lote definido" }, ...dados.lotes.map((l) => ({ value: l.id, label: l.nome }))]}
+        />
+        <Field label="Data de entrada" value={`${formatDataBR(hoje)} (data de hoje, do cadastro no curral)`} />
+      </div>
+
+      {erro && <div style={styles.errorBox}>{erro}</div>}
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Cadastrando..." : "Cadastrar animais"}</PrimaryButton>
     </div>
   );
 }
