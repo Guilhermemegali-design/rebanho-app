@@ -67,6 +67,15 @@ create policy "cliente_edita_locais" on rebanho_locais
   for update using (cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()))
   with check (cliente_id in (select cliente_id from clientes_usuarios where auth_user_id = auth.uid()));
 
+create policy "cliente_exclui_locais" on rebanho_locais
+  for delete to authenticated
+  using (
+    cliente_id in (
+      select cliente_id from clientes_usuarios
+      where auth_user_id = (select auth.uid())
+    )
+  );
+
 create index idx_rebanho_locais_cliente on rebanho_locais(cliente_id);
 
 -- ------------------------------------------------------------

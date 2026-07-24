@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { styles } from "@/lib/styles";
-import { MapPin, Layers, Trash2 } from "lucide-react";
+import { MapPin, Layers, Trash2, Pencil } from "lucide-react";
 import { ListHeader, PageHeader, BackHeader, EmptyHint, InputField, SelectField, PrimaryButton } from "@/components/UI";
 
 const TIPOS_LOCAL = { pasto: "Pasto", curral: "Curral", baia: "Baia", outro: "Outro" };
@@ -10,6 +10,7 @@ const TIPOS_LOCAL = { pasto: "Pasto", curral: "Curral", baia: "Baia", outro: "Ou
 export default function LocaisLotesTab({ dados }) {
   const [sub, setSub] = useState("locais");
   const [modo, setModo] = useState("lista");
+  const [itemEditando, setItemEditando] = useState(null);
 
   return (
     <div>
@@ -20,21 +21,64 @@ export default function LocaisLotesTab({ dados }) {
       </div>
 
       {sub === "locais" ? (
-        modo === "novo" ? (
-          <FormLocal dados={dados} onSalvar={async (p) => { await dados.criarLocal(p); setModo("lista"); }} onCancelar={() => setModo("lista")} />
+        modo === "novo" || modo === "editar" ? (
+          <FormLocal
+            inicial={modo === "editar" ? itemEditando : null}
+            onSalvar={async (p) => {
+              if (modo === "editar") await dados.atualizarLocal(itemEditando.id, p);
+              else await dados.criarLocal(p);
+              setModo("lista");
+              setItemEditando(null);
+            }}
+            onCancelar={() => { setModo("lista"); setItemEditando(null); }}
+          />
         ) : (
-          <ListaLocais dados={dados} onNovo={() => setModo("novo")} />
+          <ListaLocais
+            dados={dados}
+            onNovo={() => setModo("novo")}
+            onEditar={(local) => { setItemEditando(local); setModo("editar"); }}
+          />
         )
-      ) : modo === "novo" ? (
-        <FormLote dados={dados} onSalvar={async (p) => { await dados.criarLote(p); setModo("lista"); }} onCancelar={() => setModo("lista")} />
+      ) : modo === "novo" || modo === "editar" ? (
+        <FormLote
+          dados={dados}
+          inicial={modo === "editar" ? itemEditando : null}
+          onSalvar={async (p) => {
+            if (modo === "editar") await dados.atualizarLote(itemEditando.id, p);
+            else await dados.criarLote(p);
+            setModo("lista");
+            setItemEditando(null);
+          }}
+          onCancelar={() => { setModo("lista"); setItemEditando(null); }}
+        />
       ) : (
-        <ListaLotes dados={dados} onNovo={() => setModo("novo")} />
+        <ListaLotes
+          dados={dados}
+          onNovo={() => setModo("novo")}
+          onEditar={(lote) => { setItemEditando(lote); setModo("editar"); }}
+        />
       )}
     </div>
   );
 }
 
-function ListaLocais({ dados, onNovo }) {
+function ListaLocais({ dados, onNovo, onEditar }) {
+  const [excluindoId, setExcluindoId] = useState(null);
+
+  async function handleExcluir(local, qtd) {
+    const lotesVinculados = dados.lotes.filter((lote) => lote.local_id === local.id).length;
+    const detalhe = ` ${qtd} animal(is) e ${lotesVinculados} lote(s) serão preservados e ficarão sem local.`;
+    if (!window.confirm(`Excluir o local "${local.nome}"?${detalhe}`)) return;
+    setExcluindoId(local.id);
+    try {
+      await dados.excluirLocal(local.id);
+    } catch (err) {
+      window.alert(err.message || "Não foi possível excluir o local.");
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
   return (
     <div>
       <ListHeader title="Locais" actionLabel="Novo local" onAction={onNovo} />
@@ -49,6 +93,19 @@ function ListaLocais({ dados, onNovo }) {
               <div style={styles.listItemSub}>{TIPOS_LOCAL[l.tipo] || l.tipo}{l.capacidade ? ` · capacidade ${l.capacidade}` : ""}</div>
             </div>
             <div style={{ fontWeight: 800, fontSize: 15 }}>{qtd}</div>
+            <button type="button" onClick={() => onEditar(l)} aria-label={`Editar local ${l.nome}`} title="Editar local" style={styles.iconEditBtn}>
+              <Pencil size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExcluir(l, qtd)}
+              disabled={excluindoId === l.id}
+              aria-label={`Excluir local ${l.nome}`}
+              title="Excluir local"
+              style={{ ...styles.iconDangerBtn, opacity: excluindoId === l.id ? 0.5 : 1 }}
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         );
       })}
@@ -56,10 +113,10 @@ function ListaLocais({ dados, onNovo }) {
   );
 }
 
-function FormLocal({ onSalvar, onCancelar }) {
-  const [nome, setNome] = useState("");
-  const [tipo, setTipo] = useState("pasto");
-  const [capacidade, setCapacidade] = useState("");
+function FormLocal({ onSalvar, onCancelar, inicial }) {
+  const [nome, setNome] = useState(inicial?.nome || "");
+  const [tipo, setTipo] = useState(inicial?.tipo || "pasto");
+  const [capacidade, setCapacidade] = useState(inicial?.capacidade ?? "");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -77,19 +134,19 @@ function FormLocal({ onSalvar, onCancelar }) {
 
   return (
     <div>
-      <BackHeader title="Novo local" onBack={onCancelar} />
+      <BackHeader title={inicial ? "Editar local" : "Novo local"} onBack={onCancelar} />
       <div style={styles.card}>
         <InputField label="Nome" value={nome} onChange={setNome} placeholder="Ex: Piquete 3" />
         <SelectField label="Tipo" value={tipo} onChange={setTipo} options={Object.entries(TIPOS_LOCAL).map(([value, label]) => ({ value, label }))} />
         <InputField label="Capacidade (opcional)" type="number" value={capacidade} onChange={setCapacidade} placeholder="Nº de cabeças" />
       </div>
       {erro && <div style={styles.errorBox}>{erro}</div>}
-      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar local"}</PrimaryButton>
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : inicial ? "Salvar alterações" : "Salvar local"}</PrimaryButton>
     </div>
   );
 }
 
-function ListaLotes({ dados, onNovo }) {
+function ListaLotes({ dados, onNovo, onEditar }) {
   const [excluindoId, setExcluindoId] = useState(null);
   const [erro, setErro] = useState("");
 
@@ -125,6 +182,9 @@ function ListaLotes({ dados, onNovo }) {
               <div style={styles.listItemSub}>{local ? local.nome : "Sem local"} · {l.situacao === "ativo" ? "Ativo" : "Encerrado"}</div>
             </div>
             <div style={{ fontWeight: 800, fontSize: 15 }}>{qtd}</div>
+            <button type="button" onClick={() => onEditar(l)} aria-label={`Editar lote ${l.nome}`} title="Editar lote" style={styles.iconEditBtn}>
+              <Pencil size={15} />
+            </button>
             <button
               type="button"
               onClick={() => handleExcluir(l, qtd)}
@@ -142,9 +202,9 @@ function ListaLotes({ dados, onNovo }) {
   );
 }
 
-function FormLote({ dados, onSalvar, onCancelar }) {
-  const [nome, setNome] = useState("");
-  const [localId, setLocalId] = useState("");
+function FormLote({ dados, onSalvar, onCancelar, inicial }) {
+  const [nome, setNome] = useState(inicial?.nome || "");
+  const [localId, setLocalId] = useState(inicial?.local_id || "");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -162,7 +222,7 @@ function FormLote({ dados, onSalvar, onCancelar }) {
 
   return (
     <div>
-      <BackHeader title="Novo lote" onBack={onCancelar} />
+      <BackHeader title={inicial ? "Editar lote" : "Novo lote"} onBack={onCancelar} />
       <div style={styles.card}>
         <InputField label="Nome" value={nome} onChange={setNome} placeholder="Ex: Lote Recria 01" />
         <SelectField
@@ -173,7 +233,7 @@ function FormLote({ dados, onSalvar, onCancelar }) {
         />
       </div>
       {erro && <div style={styles.errorBox}>{erro}</div>}
-      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar lote"}</PrimaryButton>
+      <PrimaryButton onClick={handleSalvar} disabled={salvando}>{salvando ? "Salvando..." : inicial ? "Salvar alterações" : "Salvar lote"}</PrimaryButton>
     </div>
   );
 }

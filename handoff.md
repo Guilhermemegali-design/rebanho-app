@@ -165,6 +165,8 @@ operador aos animais da própria fazenda.
 - O quadro de Movimentações permite excluir transferências de lote ou
   local; ao apagar a transferência mais recente, o animal volta ao lote ou
   local de origem.
+- Locais e lotes podem ser editados diretamente nas listas. Locais também
+  podem ser excluídos sem apagar animais ou lotes vinculados.
 - Em Sanidade, o mesmo manejo pode ser lançado para todos os animais
   ativos de um lote, mantendo um registro individual em cada ficha.
 
