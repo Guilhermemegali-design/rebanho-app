@@ -116,6 +116,10 @@ Os animais cadastrados na sequência aparecem logo abaixo do formulário
 com botão **Editar**. A ficha completa do animal volta ao formulário para
 correção na própria tela, sem retornar à lista geral.
 
+`useDadosRebanho.carregarTudo()` só ativa o estado global de carregamento
+na primeira carga. Recarregamentos após sincronização acontecem em segundo
+plano para não desmontar o `AnimaisTab` nem fechar o cadastro contínuo.
+
 Há também um botão **Excluir** ao lado de **Editar**, tanto nessa sequência
 quanto na ficha individual. A exclusão exige confirmação e remove o animal
 e seu histórico relacionado; a policy `cliente_exclui_animais` limita o
