@@ -59,9 +59,9 @@ export default function MapaFazenda({ dados }) {
       const L = modulo.default || modulo;
       leafletRef.current = L;
       const mapa = L.map(elementoRef.current, { zoomControl: true }).setView([-18.5, -49.5], 5);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
         maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: "Esri, Maxar, Earthstar Geographics e comunidade GIS",
       }).addTo(mapa);
       grupoDadosRef.current = L.layerGroup().addTo(mapa);
       mapaRef.current = mapa;
