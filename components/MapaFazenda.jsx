@@ -102,10 +102,15 @@ export default function MapaFazenda({ dados }) {
       if (camadaGeo.getBounds().isValid()) mapa.fitBounds(camadaGeo.getBounds(), { padding: [20, 20] });
     }
 
-    for (const cocho of dados.cochos.filter((item) => item.latitude && item.longitude)) {
-      L.marker([Number(cocho.latitude), Number(cocho.longitude)], {
+    for (const cocho of dados.cochos) {
+      const area = camadasRef.current.find((item) => item.localId === cocho.local_id);
+      const posicao = cocho.latitude && cocho.longitude
+        ? [Number(cocho.latitude), Number(cocho.longitude)]
+        : area?.layer.getBounds().getCenter();
+      if (!posicao) continue;
+      L.marker(posicao, {
         icon: L.divIcon({ className: "rastro-map-icon", html: '<span class="rastro-cocho-pin">C</span>', iconSize: [28, 28] }),
-      }).bindTooltip(cocho.nome).addTo(grupo);
+      }).bindTooltip(cocho.latitude ? cocho.nome : `${cocho.nome} · posição aproximada`).addTo(grupo);
     }
 
     for (const lote of dados.lotes.filter((item) => item.situacao === "ativo")) {

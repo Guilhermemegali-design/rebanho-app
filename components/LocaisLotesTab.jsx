@@ -62,14 +62,17 @@ export default function LocaisLotesTab({ dados }) {
           onNovo={() => setModo("novo")}
           onEditar={(lote) => { setItemEditando(lote); setModo("editar"); }}
         />
-      ) : modo === "novo" ? (
+      ) : modo === "novo" || modo === "editar" ? (
         <FormCocho
           dados={dados}
+          inicial={modo === "editar" ? itemEditando : null}
           onSalvar={async (payload) => {
-            await dados.criarCocho(payload);
+            if (modo === "editar") await dados.atualizarCocho(itemEditando.id, payload);
+            else await dados.criarCocho(payload);
             setModo("lista");
+            setItemEditando(null);
           }}
-          onCancelar={() => setModo("lista")}
+          onCancelar={() => { setModo("lista"); setItemEditando(null); }}
         />
       ) : itemEditando ? (
         <DetalheCocho
@@ -82,6 +85,7 @@ export default function LocaisLotesTab({ dados }) {
           dados={dados}
           onNovo={() => setModo("novo")}
           onAbrir={setItemEditando}
+          onEditar={(cocho) => { setItemEditando(cocho); setModo("editar"); }}
         />
       )}
     </div>
@@ -95,7 +99,7 @@ function localAtualDoLote(lote, dados) {
   return animal?.local_atual_id || lote.local_id || null;
 }
 
-function ListaCochos({ dados, onNovo, onAbrir }) {
+function ListaCochos({ dados, onNovo, onAbrir, onEditar }) {
   return (
     <div>
       <ListHeader title="Cochos" actionLabel="Novo cocho" onAction={onNovo} />
@@ -104,26 +108,31 @@ function ListaCochos({ dados, onNovo, onAbrir }) {
         const local = dados.locais.find((item) => item.id === cocho.local_id);
         const ultimo = dados.abastecimentos.find((item) => item.cocho_id === cocho.id);
         return (
-          <button key={cocho.id} type="button" style={{ ...styles.listItem, width: "100%" }} onClick={() => onAbrir(cocho)}>
+          <div key={cocho.id} style={{ ...styles.listItem, width: "100%" }}>
             <div style={styles.avatar}><Wheat size={17} /></div>
-            <div style={{ flex: 1 }}>
+            <button type="button" onClick={() => onAbrir(cocho)} style={{ flex: 1, border: 0, background: "transparent", padding: 0, textAlign: "left", cursor: "pointer" }}>
               <div style={styles.listItemTitle}>{cocho.nome}</div>
               <div style={styles.listItemSub}>{local?.nome || "Sem local"}{ultimo ? ` · último: ${ultimo.quantidade} ${ultimo.unidade} de ${ultimo.produto}` : " · ainda não abastecido"}</div>
-            </div>
-            <PackagePlus size={17} color="#1F4D45" />
-          </button>
+            </button>
+            <button type="button" onClick={() => onEditar(cocho)} style={styles.iconBtn} title="Editar cocho" aria-label={`Editar ${cocho.nome}`}><Pencil size={16} /></button>
+            <button type="button" onClick={() => onAbrir(cocho)} style={styles.iconBtn} title="Registrar abastecimento" aria-label={`Abrir ${cocho.nome}`}><PackagePlus size={17} /></button>
+          </div>
         );
       })}
     </div>
   );
 }
 
-function FormCocho({ dados, onSalvar, onCancelar }) {
-  const [nome, setNome] = useState("");
-  const [localId, setLocalId] = useState("");
-  const [tipo, setTipo] = useState("sal");
-  const [capacidade, setCapacidade] = useState("");
-  const [gps, setGps] = useState(null);
+function FormCocho({ dados, inicial, onSalvar, onCancelar }) {
+  const [nome, setNome] = useState(inicial?.nome || "");
+  const [localId, setLocalId] = useState(inicial?.local_id || "");
+  const [tipo, setTipo] = useState(inicial?.tipo || "sal");
+  const [capacidade, setCapacidade] = useState(inicial?.capacidade_kg ?? "");
+  const [gps, setGps] = useState(inicial?.latitude && inicial?.longitude ? {
+    latitude: Number(inicial.latitude),
+    longitude: Number(inicial.longitude),
+    precisao: null,
+  } : null);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -161,7 +170,7 @@ function FormCocho({ dados, onSalvar, onCancelar }) {
 
   return (
     <div>
-      <BackHeader title="Novo cocho" onBack={onCancelar} />
+      <BackHeader title={inicial ? "Editar cocho" : "Novo cocho"} onBack={onCancelar} />
       <div style={styles.card}>
         <InputField label="Nome ou código" value={nome} onChange={setNome} placeholder="Ex: Cocho Pasto 01" />
         <SelectField label="Pasto/local" value={localId} onChange={setLocalId} options={[{ value: "", label: "Selecione" }, ...dados.locais.map((local) => ({ value: local.id, label: local.nome }))]} />
@@ -169,9 +178,9 @@ function FormCocho({ dados, onSalvar, onCancelar }) {
         <InputField label="Capacidade (kg)" type="number" value={capacidade} onChange={setCapacidade} placeholder="Opcional" />
       </div>
       <button type="button" onClick={capturarGps} style={styles.secondaryBtn}><Navigation size={15} style={{ verticalAlign: "middle", marginRight: 7 }} />Usar minha localização para o cocho</button>
-      {gps && <div style={styles.hardwareHint}>GPS salvo · precisão aproximada de {Math.round(gps.precisao)} m</div>}
+      {gps && <div style={styles.hardwareHint}>{gps.precisao ? `GPS salvo · precisão aproximada de ${Math.round(gps.precisao)} m` : "GPS do cocho mantido"}</div>}
       {erro && <div style={styles.errorBox}>{erro}</div>}
-      <PrimaryButton onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : "Salvar cocho"}</PrimaryButton>
+      <PrimaryButton onClick={salvar} disabled={salvando}>{salvando ? "Salvando..." : inicial ? "Salvar alterações" : "Salvar cocho"}</PrimaryButton>
     </div>
   );
 }

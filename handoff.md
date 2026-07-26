@@ -199,6 +199,9 @@ operador aos animais da própria fazenda.
   uma fotografia dos IDs dos animais atendidos, calculando o consumo
   estimado por animal. Abastecimentos usam a mesma fila IndexedDB das
   operações de curral e funcionam sem sinal.
+- Cochos podem ser editados diretamente na lista. No mapa, cochos com GPS
+  aparecem na coordenada exata; sem GPS, aparecem no centro do polígono do
+  pasto selecionado, identificados como posição aproximada.
 
 ## RLS (permissões)
 
