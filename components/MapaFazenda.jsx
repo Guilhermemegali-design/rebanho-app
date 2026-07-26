@@ -109,7 +109,12 @@ export default function MapaFazenda({ dados }) {
         : area?.layer.getBounds().getCenter();
       if (!posicao) continue;
       L.marker(posicao, {
-        icon: L.divIcon({ className: "rastro-map-icon", html: '<span class="rastro-cocho-pin">C</span>', iconSize: [28, 28] }),
+        icon: L.divIcon({
+          className: "rastro-map-icon",
+          html: '<span class="rastro-cocho-pin"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 9h22l-3 10H8L5 9Z"/><path d="M10 19 8 26M22 19l2 7M4 9h24"/></svg></span>',
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        }),
       }).bindTooltip(cocho.latitude ? cocho.nome : `${cocho.nome} · posição aproximada`).addTo(grupo);
     }
 

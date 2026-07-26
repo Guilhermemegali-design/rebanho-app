@@ -151,12 +151,21 @@ input, textarea, select {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 27px;
-  height: 27px;
+  width: 34px;
+  height: 34px;
   border: 2px solid #7A572C;
   border-radius: 50%;
   background: #FFF1C7;
   color: #7A572C;
-  font: 800 12px system-ui, sans-serif;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+.rastro-cocho-pin svg {
+  width: 23px;
+  height: 23px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
