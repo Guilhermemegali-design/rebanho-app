@@ -259,6 +259,7 @@ const DATA_FORMATTER = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month:
 function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", onTrocarFazenda }) {
   const [tab, setTab] = useState("painel");
   const [menuAberto, setMenuAberto] = useState(false);
+  const [animalAbrirId, setAnimalAbrirId] = useState(null);
   const dados = useDadosRebanho(consultorId, clienteId);
   const { online, sincronizando, pendentes, sincronizar } = useConexao(consultorId);
 
@@ -334,8 +335,22 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isCon
             <div style={styles.loadingScreen}>Carregando dados...</div>
           ) : (
             <>
-              {tab === "painel" && <PainelTab dados={dados} />}
-              {tab === "animais" && <AnimaisTab dados={dados} />}
+              {tab === "painel" && (
+                <PainelTab
+                  dados={dados}
+                  onAbrirAnimal={(animalId) => {
+                    setAnimalAbrirId(animalId);
+                    setTab("animais");
+                  }}
+                />
+              )}
+              {tab === "animais" && (
+                <AnimaisTab
+                  dados={dados}
+                  animalInicialId={animalAbrirId}
+                  onAnimalInicialConsumido={() => setAnimalAbrirId(null)}
+                />
+              )}
               {tab === "locais" && <LocaisLotesTab dados={dados} />}
               {tab === "movimentacoes" && <MovimentacoesTab dados={dados} />}
               {tab === "pesagens" && <PesagensTab dados={dados} />}

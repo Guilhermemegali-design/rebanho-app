@@ -179,6 +179,10 @@ operador aos animais da própria fazenda.
   por e-mail, gerar um código individual, copiar/cancelar convites e alterar
   ou remover usuários. Os papéis são administrador, operador (`editor`) e
   somente leitura (`leitor`).
+- No Painel, ao abrir um lote, aparece logo abaixo dos indicadores a lista
+  dos animais ativos com categoria, peso atual, data de referência e GMD
+  individual. A linha/cartão é clicável e abre a ficha completa do animal na
+  aba Animais.
 
 ## RLS (permissões)
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL, calcularGmd, calcularValorPorArroba } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
@@ -13,7 +13,7 @@ const SITUACOES = { ativo: "Ativo", vendido: "Vendido", morto: "Morto", transfer
 const STATUS_BADGE_STYLE = { ativo: styles.statusBadgeAtivo, atencao: styles.statusBadgeAtencao, carencia: styles.statusBadgeCarencia, neutro: styles.tagOrange };
 const RACAS = ["Nelore", "Nelorado", "F1 Angus", "Cruzado", "Guzera", "Guzeratado"];
 
-export default function AnimaisTab({ dados }) {
+export default function AnimaisTab({ dados, animalInicialId, onAnimalInicialConsumido }) {
   const [busca, setBusca] = useState("");
   const [loteFiltro, setLoteFiltro] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("");
@@ -21,6 +21,16 @@ export default function AnimaisTab({ dados }) {
   const [animalSelecionado, setAnimalSelecionado] = useState(null);
   const [avisoScan, setAvisoScan] = useState("");
   const [excluindoId, setExcluindoId] = useState(null);
+
+  useEffect(() => {
+    if (!animalInicialId) return;
+    const animal = dados.animais.find((item) => item.id === animalInicialId);
+    if (animal) {
+      setAnimalSelecionado(animal);
+      setModo("detalhe");
+    }
+    onAnimalInicialConsumido?.();
+  }, [animalInicialId, dados.animais, onAnimalInicialConsumido]);
 
   async function excluirDireto(animal) {
     if (!window.confirm(`Excluir o animal ${animal.brinco_atual}? Pesagens, movimentações e sanidade também serão removidas.`)) return;

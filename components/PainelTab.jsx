@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import { styles } from "@/lib/styles";
 import { formatKg, formatDataBR, calcularGmd } from "@/lib/format";
 import { calcularAlertas } from "@/lib/alerts";
-import { Users, TrendingUp, AlertTriangle, Syringe, Scale, ChevronLeft } from "lucide-react";
+import { Users, TrendingUp, AlertTriangle, Syringe, Scale, ChevronLeft, ChevronRight, Tag } from "lucide-react";
 import { EmptyHint, PageHeader } from "@/components/UI";
 
-export default function PainelTab({ dados }) {
+export default function PainelTab({ dados, onAbrirAnimal }) {
   const { locais, lotes } = dados;
   const [loteSelecionadoId, setLoteSelecionadoId] = useState(null);
   const loteSelecionado = lotes.find((l) => l.id === loteSelecionadoId) || null;
@@ -58,6 +58,23 @@ export default function PainelTab({ dados }) {
   const alertas = todosAlertas.slice(0, 20);
 
   const lotesAtivos = lotes.filter((l) => l.situacao === "ativo");
+  const animaisDoLote = useMemo(() => {
+    if (!loteSelecionado) return [];
+    return ativos
+      .map((animal) => {
+        const historico = pesagens
+          .filter((pesagem) => pesagem.animal_id === animal.id)
+          .sort((a, b) => a.data.localeCompare(b.data));
+        const ultima = historico.at(-1);
+        const anterior = historico.at(-2);
+        const pesoAtual = ultima?.peso ?? animal.peso_entrada;
+        const gmd = anterior && ultima
+          ? calcularGmd(anterior.peso, anterior.data, ultima.peso, ultima.data)
+          : calcularGmd(animal.peso_entrada, animal.data_entrada, ultima?.peso, ultima?.data);
+        return { animal, pesoAtual, gmd, dataPeso: ultima?.data || animal.data_entrada };
+      })
+      .sort((a, b) => String(a.animal.brinco_atual).localeCompare(String(b.animal.brinco_atual), "pt-BR", { numeric: true }));
+  }, [ativos, loteSelecionado, pesagens]);
 
   return (
     <div>
@@ -90,6 +107,79 @@ export default function PainelTab({ dados }) {
           <div style={styles.kpiValor}>{loteSelecionado ? 1 : lotesAtivos.length}</div>
         </div>
       </div>
+
+      {loteSelecionado && (
+        <>
+          <div style={styles.sectionTitle}>Animais do lote e GMD individual</div>
+          {animaisDoLote.length === 0 && <EmptyHint text="Este lote não possui animais ativos." />}
+          <div style={styles.tableCard}>
+            {animaisDoLote.length > 0 && (
+              <div className="table-view" style={{ overflowX: "auto" }}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.tableTh}>Animal</th>
+                      <th style={styles.tableTh}>Categoria</th>
+                      <th style={styles.tableTh}>Peso atual</th>
+                      <th style={styles.tableTh}>GMD</th>
+                      <th style={styles.tableTh}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {animaisDoLote.map(({ animal, pesoAtual, gmd, dataPeso }) => (
+                      <tr key={animal.id} style={styles.tableRow} onClick={() => onAbrirAnimal?.(animal.id)}>
+                        <td style={styles.tableTd}>
+                          <div style={styles.tableCellTitle}>{animal.brinco_atual}</div>
+                          <div style={styles.tableCellSub}>{animal.raca || "Raça não informada"}</div>
+                        </td>
+                        <td style={styles.tableTd}>{animal.categoria || "—"}</td>
+                        <td style={styles.tableTd}>
+                          <div style={styles.tableCellStrong}>{formatKg(pesoAtual)}</div>
+                          <div style={styles.tableCellSub}>{formatDataBR(dataPeso)}</div>
+                        </td>
+                        <td style={styles.tableTd}>
+                          {gmd != null
+                            ? <span style={gmd >= 0.5 ? styles.gmdBom : styles.gmdBaixo}>{gmd.toFixed(3)} kg/d</span>
+                            : "—"}
+                        </td>
+                        <td style={{ ...styles.tableTd, textAlign: "right" }}><ChevronRight size={17} color="#9A9A94" /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="card-view" style={{ padding: animaisDoLote.length ? "10px 12px" : 0 }}>
+              {animaisDoLote.map(({ animal, pesoAtual, gmd, dataPeso }) => (
+                <button
+                  key={animal.id}
+                  type="button"
+                  onClick={() => onAbrirAnimal?.(animal.id)}
+                  style={{ ...styles.listItem, marginBottom: 8 }}
+                >
+                  <div style={styles.avatar}><Tag size={17} /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
+                    <div style={styles.listItemSub}>
+                      {[animal.categoria, animal.raca].filter(Boolean).join(" · ") || "Sem categoria"}
+                    </div>
+                    <div style={{ ...styles.listItemSub, marginTop: 4 }}>
+                      {formatKg(pesoAtual)} em {formatDataBR(dataPeso)}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={gmd != null ? (gmd >= 0.5 ? styles.gmdBom : styles.gmdBaixo) : styles.listItemSub}>
+                      {gmd != null ? `${gmd.toFixed(3)} kg/d` : "GMD —"}
+                    </div>
+                    <div style={styles.listItemSub}>Ver ficha</div>
+                  </div>
+                  <ChevronRight size={17} color="#9A9A94" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       <div style={styles.sectionTitle}>Precisam de atenção</div>
       {alertas.length === 0 && <EmptyHint text="Nenhuma pendência no momento." />}
