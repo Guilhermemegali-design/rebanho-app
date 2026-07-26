@@ -183,6 +183,15 @@ operador aos animais da própria fazenda.
   dos animais ativos com categoria, peso atual, data de referência e GMD
   individual. A linha/cartão é clicável e abre a ficha completa do animal na
   aba Animais.
+- Lotes e locais ganhou um mapa operacional offline. No desktop o lote pode
+  ser arrastado entre pastos; no celular, seleciona-se o lote e depois o
+  destino. A confirmação cria movimentação para cada animal, atualiza o mapa
+  localmente e sincroniza depois.
+- Cochos podem ser cadastrados por pasto com coordenadas do GPS do celular.
+  Cada abastecimento registra produto, quantidade, unidade, usuário, lote e
+  uma fotografia dos IDs dos animais atendidos, calculando o consumo
+  estimado por animal. Abastecimentos usam a mesma fila IndexedDB das
+  operações de curral e funcionam sem sinal.
 
 ## RLS (permissões)
 
@@ -197,6 +206,11 @@ As gravações dessas tabelas também conferem o papel do vínculo: administrado
 e editor gravam; leitor só consulta. Convites são resgatados pela RPC
 `resgatar_convite_rebanho`, que valida autenticação, e-mail e aplica o papel
 definido pelo gestor sem expor chave administrativa no navegador.
+
+`rebanho_cochos` e `rebanho_abastecimentos_cochos` têm RLS por cliente e
+respeitam os mesmos níveis de acesso. O papel `anon` não possui privilégios
+nessas tabelas e `authenticated` recebe apenas SELECT/INSERT/UPDATE/DELETE
+(sem TRUNCATE).
 
 `rebanho_auditoria` (trigger em animais/pesagens/movimentações/
 procedimentos) teve **dois problemas de segurança corrigidos ainda nesta

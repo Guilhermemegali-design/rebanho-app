@@ -9,7 +9,7 @@
 // que o APP em si (a interface) carregue offline.
 // ============================================================
 
-const CACHE_NAME = "rastro-cache-v2";
+const CACHE_NAME = "rastro-cache-v3";
 
 const ARQUIVOS_ESSENCIAIS = [
   "/",
