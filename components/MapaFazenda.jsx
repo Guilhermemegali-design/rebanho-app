@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { kml } from "@tmcw/togeojson";
 import { strFromU8, unzipSync } from "fflate";
-import { FileUp, LocateFixed, Map, Move, Search } from "lucide-react";
+import { FileUp, LocateFixed, Map as MapIcon, Move, Search } from "lucide-react";
 import { styles } from "@/lib/styles";
 
 function normalizar(texto) {
@@ -225,7 +225,7 @@ export default function MapaFazenda({ dados }) {
   return (
     <div>
       <div style={{ ...styles.offlineNotice, background: "#E4EFE9", color: "#1F4D45" }}>
-        <Map size={17} />
+        <MapIcon size={17} />
         <div><strong>Mapa geográfico da fazenda</strong><br />Importe o KML/KMZ para desenhar os pastos. As áreas permanecem visíveis offline.</div>
       </div>
       <div style={{ ...styles.tableFiltersRow, padding: 0, border: 0, marginBottom: 10 }}>
