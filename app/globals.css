@@ -121,3 +121,42 @@ input, textarea, select {
     width: 100%;
   }
 }
+
+.rastro-map-icon {
+  background: transparent;
+  border: 0;
+}
+
+.rastro-lote-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  max-width: 150px;
+  height: 30px;
+  padding: 0 10px;
+  border: 2px solid #1F4D45;
+  border-radius: 18px;
+  background: #fff;
+  color: #1F4D45;
+  font: 700 11px/1.1 system-ui, sans-serif;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: grab;
+}
+
+.rastro-cocho-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border: 2px solid #7A572C;
+  border-radius: 50%;
+  background: #FFF1C7;
+  color: #7A572C;
+  font: 800 12px system-ui, sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}

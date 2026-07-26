@@ -187,6 +187,13 @@ operador aos animais da própria fazenda.
   ser arrastado entre pastos; no celular, seleciona-se o lote e depois o
   destino. A confirmação cria movimentação para cada animal, atualiza o mapa
   localmente e sincroniza depois.
+- O mapa operacional agora usa mapa geográfico do OpenStreetMap. A fazenda
+  pode ser localizada por nome/endereço ou GPS e o usuário pode importar
+  arquivos KML e KMZ (até 15 MB). Os polígonos importados são vinculados aos
+  locais pelo nome; nomes ainda inexistentes podem ser criados como pastos.
+  A geometria é salva em `rebanho_mapas_fazenda`, fica em cache no IndexedDB
+  e os trechos do mapa já visualizados ficam disponíveis no cache do PWA.
+  A busca de endereço exige internet.
 - Cochos podem ser cadastrados por pasto com coordenadas do GPS do celular.
   Cada abastecimento registra produto, quantidade, unidade, usuário, lote e
   uma fotografia dos IDs dos animais atendidos, calculando o consumo
@@ -211,6 +218,12 @@ definido pelo gestor sem expor chave administrativa no navegador.
 respeitam os mesmos níveis de acesso. O papel `anon` não possui privilégios
 nessas tabelas e `authenticated` recebe apenas SELECT/INSERT/UPDATE/DELETE
 (sem TRUNCATE).
+
+`rebanho_mapas_fazenda` segue o mesmo isolamento por cliente: consultor
+gerencia, clientes vinculados consultam e apenas administrador/editor podem
+gravar. O papel `anon` não tem acesso. A busca geográfica passa por
+`/api/geocodificar`, com consulta iniciada pelo usuário, limite de resultados
+e cache.
 
 `rebanho_auditoria` (trigger em animais/pesagens/movimentações/
 procedimentos) teve **dois problemas de segurança corrigidos ainda nesta

@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { styles } from "@/lib/styles";
-import { MapPin, Layers, Trash2, Pencil, Map, PackagePlus, Navigation, Wheat, Move } from "lucide-react";
+import { MapPin, Layers, Trash2, Pencil, PackagePlus, Navigation, Wheat } from "lucide-react";
 import { ListHeader, PageHeader, BackHeader, EmptyHint, InputField, SelectField, PrimaryButton } from "@/components/UI";
+import MapaFazenda from "@/components/MapaFazenda";
 
 const TIPOS_LOCAL = { pasto: "Pasto", curral: "Curral", baia: "Baia", outro: "Outro" };
 
@@ -92,117 +93,6 @@ function localAtualDoLote(lote, dados) {
     item.situacao === "ativo" && item.lote_atual_id === lote.id && item.local_atual_id
   ));
   return animal?.local_atual_id || lote.local_id || null;
-}
-
-function MapaFazenda({ dados }) {
-  const [loteSelecionadoId, setLoteSelecionadoId] = useState(null);
-  const [movendo, setMovendo] = useState(false);
-  const [mensagem, setMensagem] = useState("");
-  const locaisMapa = dados.locais.filter((local) => ["pasto", "curral", "baia"].includes(local.tipo));
-  const lotesAtivos = dados.lotes.filter((lote) => lote.situacao === "ativo");
-
-  async function transferirLote(loteId, localDestinoId) {
-    const lote = lotesAtivos.find((item) => item.id === loteId);
-    const origemId = localAtualDoLote(lote, dados);
-    if (!lote || origemId === localDestinoId) {
-      setLoteSelecionadoId(null);
-      return;
-    }
-    const destino = dados.locais.find((item) => item.id === localDestinoId);
-    const animais = dados.animais.filter((animal) => (
-      animal.situacao === "ativo" && animal.lote_atual_id === lote.id
-    ));
-    if (!window.confirm(`Transferir o ${lote.nome}, com ${animais.length} animal(is), para ${destino.nome}?`)) return;
-    setMovendo(true);
-    setMensagem("");
-    try {
-      const hoje = new Date().toISOString().slice(0, 10);
-      await dados.registrarMovimentacoesEmLote(animais.map((animal) => ({
-        animalId: animal.id,
-        dados: {
-          tipo: "transferencia_local",
-          lote_origem_id: lote.id,
-          lote_destino_id: lote.id,
-          local_origem_id: animal.local_atual_id || origemId,
-          local_destino_id: localDestinoId,
-          data: hoje,
-          observacoes: `Movimentação do lote pelo mapa para ${destino.nome}`,
-        },
-      })));
-      setMensagem(`Lote transferido para ${destino.nome}. Se estiver offline, a movimentação será enviada quando voltar o sinal.`);
-      setLoteSelecionadoId(null);
-    } catch (err) {
-      setMensagem(err.message || "Não foi possível movimentar o lote.");
-    } finally {
-      setMovendo(false);
-    }
-  }
-
-  return (
-    <div>
-      <div style={{ ...styles.offlineNotice, background: "#E4EFE9", color: "#1F4D45" }}>
-        <Map size={17} />
-        <div>
-          <strong>Mapa operacional offline</strong><br />
-          No celular, toque no lote e depois no pasto de destino. No computador, também é possível arrastar.
-        </div>
-      </div>
-      {mensagem && <div style={styles.errorBox}>{mensagem}</div>}
-      {locaisMapa.length === 0 ? (
-        <EmptyHint text="Cadastre os pastos e currais para montar o mapa." />
-      ) : (
-        <div style={mapStyles.fazenda}>
-          {locaisMapa.map((local, index) => {
-            const lotesLocal = lotesAtivos.filter((lote) => localAtualDoLote(lote, dados) === local.id);
-            const cochosLocal = dados.cochos.filter((cocho) => cocho.local_id === local.id);
-            return (
-              <div
-                key={local.id}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => transferirLote(event.dataTransfer.getData("text/lote-id"), local.id)}
-                onClick={() => loteSelecionadoId && !movendo && transferirLote(loteSelecionadoId, local.id)}
-                style={{ ...mapStyles.pasto, background: index % 3 === 0 ? "#EAF1DC" : index % 3 === 1 ? "#E1EDDF" : "#EDF0D7", outline: loteSelecionadoId ? "2px dashed #D2883F" : "none" }}
-              >
-                <div style={mapStyles.pastoTopo}>
-                  <div>
-                    <div style={mapStyles.pastoNome}>{local.nome}</div>
-                    <div style={mapStyles.pastoTipo}>{TIPOS_LOCAL[local.tipo]} · {lotesLocal.reduce((total, lote) => total + dados.animais.filter((a) => a.situacao === "ativo" && a.lote_atual_id === lote.id).length, 0)} animais</div>
-                  </div>
-                  <MapPin size={16} color="#53725D" />
-                </div>
-                <div style={mapStyles.lotesArea}>
-                  {lotesLocal.map((lote) => {
-                    const quantidade = dados.animais.filter((animal) => animal.situacao === "ativo" && animal.lote_atual_id === lote.id).length;
-                    const selecionado = loteSelecionadoId === lote.id;
-                    return (
-                      <button
-                        key={lote.id}
-                        type="button"
-                        draggable
-                        onDragStart={(event) => event.dataTransfer.setData("text/lote-id", lote.id)}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setLoteSelecionadoId(selecionado ? null : lote.id);
-                        }}
-                        style={{ ...mapStyles.lote, ...(selecionado ? mapStyles.loteSelecionado : {}) }}
-                      >
-                        <Move size={13} /> {lote.nome} · {quantidade}
-                      </button>
-                    );
-                  })}
-                </div>
-                {cochosLocal.length > 0 && (
-                  <div style={mapStyles.cochos}>
-                    {cochosLocal.map((cocho) => <span key={cocho.id} title={cocho.nome} style={mapStyles.cocho}><Wheat size={13} /> {cocho.nome}</span>)}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function ListaCochos({ dados, onNovo, onAbrir }) {
@@ -361,19 +251,6 @@ function DetalheCocho({ dados, cocho, onVoltar }) {
     </div>
   );
 }
-
-const mapStyles = {
-  fazenda: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10, background: "#D8C9A8", padding: 10, borderRadius: 18, border: "3px solid #B59B70" },
-  pasto: { minHeight: 165, borderRadius: 15, border: "2px solid #8DA276", padding: 12, cursor: "pointer", display: "flex", flexDirection: "column", transition: "outline .15s" },
-  pastoTopo: { display: "flex", justifyContent: "space-between", gap: 8 },
-  pastoNome: { fontWeight: 800, fontSize: 15, color: "#29483B" },
-  pastoTipo: { fontSize: 11.5, color: "#6B7B67", marginTop: 2 },
-  lotesArea: { display: "flex", flexWrap: "wrap", gap: 7, marginTop: 16, flex: 1, alignContent: "flex-start" },
-  lote: { border: "1px solid #1F4D45", background: "#fff", color: "#1F4D45", borderRadius: 20, padding: "7px 10px", fontSize: 12, fontWeight: 700, cursor: "grab", display: "inline-flex", alignItems: "center", gap: 5 },
-  loteSelecionado: { background: "#D2883F", color: "#fff", borderColor: "#D2883F", boxShadow: "0 0 0 3px rgba(210,136,63,.2)" },
-  cochos: { borderTop: "1px dashed #A9B896", paddingTop: 8, display: "flex", flexWrap: "wrap", gap: 5 },
-  cocho: { display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "#7A572C", background: "#FFF7E5", padding: "4px 7px", borderRadius: 8 },
-};
 
 function ListaLocais({ dados, onNovo, onEditar }) {
   const [excluindoId, setExcluindoId] = useState(null);
