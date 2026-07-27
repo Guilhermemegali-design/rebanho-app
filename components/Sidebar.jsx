@@ -24,7 +24,7 @@ export const ABAS_SIDEBAR = [
   { id: "alertas", label: "Alertas", icon: AlertTriangle },
 ];
 
-export default function Sidebar({ tab, onSelecionarTab, clienteNome, isConsultor, onTrocarFazenda, totalAlertas, usuarioEmail, isMobileAberta, onFechar, onSair }) {
+export default function Sidebar({ tab, onSelecionarTab, clienteNome, fazendaNome, isConsultor, onTrocarCliente, totalAlertas, usuarioEmail, isMobileAberta, onFechar, onSair }) {
   return (
     <>
       {isMobileAberta && <div className="sidebar-drawer-backdrop hide-desktop" onClick={onFechar} />}
@@ -42,12 +42,12 @@ export default function Sidebar({ tab, onSelecionarTab, clienteNome, isConsultor
 
         <button
           style={styles.sidebarFazendaBox}
-          onClick={isConsultor ? onTrocarFazenda : undefined}
-          title={isConsultor ? "Trocar fazenda" : undefined}
+          onClick={isConsultor ? onTrocarCliente : undefined}
+          title={isConsultor ? "Trocar cliente" : undefined}
         >
           <div>
-            <div style={styles.sidebarFazendaLabel}>Fazenda</div>
-            <div style={styles.sidebarFazendaNome}>{clienteNome}</div>
+            <div style={styles.sidebarFazendaLabel}>{clienteNome}</div>
+            <div style={styles.sidebarFazendaNome}>{fazendaNome}</div>
           </div>
           {isConsultor && <ArrowLeftRight size={14} color="#9FC2B7" />}
         </button>

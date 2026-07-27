@@ -202,6 +202,13 @@ operador aos animais da própria fazenda.
 - Cochos podem ser editados diretamente na lista. No mapa, cochos com GPS
   aparecem na coordenada exata; sem GPS, aparecem no centro do polígono do
   pasto selecionado, identificados como posição aproximada.
+- Um mesmo cliente pode ter várias fazendas. `rebanho_fazendas` guarda as
+  unidades e todas as tabelas operacionais possuem `fazenda_id`. O seletor
+  fica no topo no celular e no desktop, com botão `+` para criar outra
+  fazenda. Animais, locais, lotes, fornecedores, medicamentos, cochos,
+  abastecimentos, mapa, pesagens, movimentações e sanidade são filtrados
+  pela fazenda ativa. A migração criou uma `Fazenda principal` para cada
+  cliente e vinculou nela todos os dados anteriores sem apagá-los.
 
 ## RLS (permissões)
 

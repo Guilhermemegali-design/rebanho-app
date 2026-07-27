@@ -6,7 +6,7 @@ import { styles } from "@/lib/styles";
 import { useDadosRebanho } from "@/lib/useDadosRebanho";
 import { useConexao } from "@/lib/useConexao";
 import { calcularAlertas } from "@/lib/alerts";
-import { Wifi, WifiOff, RefreshCw, Menu } from "lucide-react";
+import { Wifi, WifiOff, RefreshCw, Menu, Plus, X } from "lucide-react";
 import Sidebar, { ABAS_SIDEBAR } from "@/components/Sidebar";
 import PainelTab from "@/components/PainelTab";
 import AnimaisTab from "@/components/AnimaisTab";
@@ -179,12 +179,12 @@ function ResolveAcessoOperador({ sessao }) {
 
   if (fazendaEscolhida) {
     const vinculo = vinculos.find((v) => v.cliente_id === fazendaEscolhida.id);
-    return <AppPrincipal consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} papel={vinculo?.papel || "editor"} />;
+    return <AmbienteCliente consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} papel={vinculo?.papel || "editor"} onTrocarCliente={() => setFazendaEscolhida(null)} />;
   }
 
   if (vinculos.length === 1) {
     const c = vinculos[0].clientes;
-    return <AppPrincipal consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} papel={vinculos[0].papel || "editor"} />;
+    return <AmbienteCliente consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} papel={vinculos[0].papel || "editor"} />;
   }
 
   return (
@@ -220,13 +220,13 @@ function SeletorFazendaConsultor({ sessao }) {
 
   if (fazendaEscolhida) {
     return (
-      <AppPrincipal
+      <AmbienteCliente
         consultorId={sessao.user.id}
         usuarioEmail={sessao.user.email}
         clienteId={fazendaEscolhida.id}
         clienteNome={fazendaEscolhida.nome}
         isConsultor
-        onTrocarFazenda={() => setFazendaEscolhida(null)}
+        onTrocarCliente={() => setFazendaEscolhida(null)}
       />
     );
   }
@@ -255,13 +255,92 @@ function SeletorFazendaConsultor({ sessao }) {
 
 const DATA_FORMATTER = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
+function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", onTrocarCliente }) {
+  const [fazendas, setFazendas] = useState(undefined);
+  const [fazendaId, setFazendaId] = useState(null);
+  const [erro, setErro] = useState("");
+
+  const carregarFazendas = useCallback(async (preferidaId) => {
+    const { data, error } = await supabase
+      .from("rebanho_fazendas")
+      .select("id, nome, ativo")
+      .eq("cliente_id", clienteId)
+      .eq("ativo", true)
+      .order("nome");
+    if (error) {
+      setErro(error.message);
+      setFazendas([]);
+      return;
+    }
+    const lista = data || [];
+    setFazendas(lista);
+    const salva = localStorage.getItem(`rastro-fazenda-${clienteId}`);
+    const escolhida = preferidaId || (lista.some((item) => item.id === salva) ? salva : lista[0]?.id);
+    setFazendaId(escolhida || null);
+  }, [clienteId]);
+
+  useEffect(() => {
+    carregarFazendas();
+  }, [carregarFazendas]);
+
+  function selecionarFazenda(id) {
+    setFazendaId(id);
+    localStorage.setItem(`rastro-fazenda-${clienteId}`, id);
+  }
+
+  async function criarFazenda(nome) {
+    const { data, error } = await supabase
+      .from("rebanho_fazendas")
+      .insert({ consultor_id: consultorId, cliente_id: clienteId, nome: nome.trim() })
+      .select("id, nome, ativo")
+      .single();
+    if (error) throw error;
+    await carregarFazendas(data.id);
+    localStorage.setItem(`rastro-fazenda-${clienteId}`, data.id);
+    return data;
+  }
+
+  if (fazendas === undefined) return <div style={styles.loadingScreen}>Carregando fazendas...</div>;
+  if (erro || !fazendaId) return (
+    <div style={styles.loginScreen}>
+      <div style={styles.loginCard}>
+        <div style={styles.loginBrand}>Fazendas do cliente</div>
+        <div style={styles.errorBox}>{erro || "Nenhuma fazenda disponível."}</div>
+        {onTrocarCliente && <button onClick={onTrocarCliente} style={styles.linkBtn}>Voltar aos clientes</button>}
+      </div>
+    </div>
+  );
+
+  const fazenda = fazendas.find((item) => item.id === fazendaId) || fazendas[0];
+  return (
+    <AppPrincipal
+      consultorId={consultorId}
+      usuarioEmail={usuarioEmail}
+      clienteId={clienteId}
+      clienteNome={clienteNome}
+      fazenda={fazenda}
+      fazendas={fazendas}
+      onSelecionarFazenda={selecionarFazenda}
+      onCriarFazenda={criarFazenda}
+      isConsultor={isConsultor}
+      papel={papel}
+      onTrocarCliente={onTrocarCliente}
+    />
+  );
+}
+
 // ---------- App principal (depois de resolvido o acesso) ----------
-function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", onTrocarFazenda }) {
+function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazenda, fazendas, onSelecionarFazenda, onCriarFazenda, isConsultor, papel = "administrador", onTrocarCliente }) {
   const [tab, setTab] = useState("painel");
   const [menuAberto, setMenuAberto] = useState(false);
   const [animalAbrirId, setAnimalAbrirId] = useState(null);
-  const dados = useDadosRebanho(consultorId, clienteId);
+  const [modalFazenda, setModalFazenda] = useState(false);
+  const [nomeNovaFazenda, setNomeNovaFazenda] = useState("");
+  const [erroFazenda, setErroFazenda] = useState("");
+  const [salvandoFazenda, setSalvandoFazenda] = useState(false);
+  const dados = useDadosRebanho(consultorId, clienteId, fazenda.id);
   const { online, sincronizando, pendentes, sincronizar } = useConexao(consultorId);
+  const podeEditar = isConsultor || papel === "administrador" || papel === "editor";
 
   const totalAlertas = useMemo(() => (dados.carregando ? 0 : calcularAlertas(dados).length), [dados]);
   const tituloAba = ABAS_SIDEBAR.find((a) => a.id === tab)?.label || (tab === "configuracoes" ? "Configurações" : "");
@@ -272,14 +351,32 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isCon
     setMenuAberto(false);
   }
 
+  async function salvarNovaFazenda(e) {
+    e.preventDefault();
+    if (!nomeNovaFazenda.trim()) return;
+    setSalvandoFazenda(true);
+    setErroFazenda("");
+    try {
+      await onCriarFazenda(nomeNovaFazenda);
+      setNomeNovaFazenda("");
+      setModalFazenda(false);
+      setTab("painel");
+    } catch (err) {
+      setErroFazenda(err.code === "23505" ? "Já existe uma fazenda com esse nome para este cliente." : err.message);
+    } finally {
+      setSalvandoFazenda(false);
+    }
+  }
+
   return (
     <div className="app-shell" style={styles.appShell}>
       <Sidebar
         tab={tab}
         onSelecionarTab={selecionarTab}
         clienteNome={clienteNome}
+        fazendaNome={fazenda.nome}
         isConsultor={isConsultor}
-        onTrocarFazenda={onTrocarFazenda}
+        onTrocarCliente={onTrocarCliente}
         totalAlertas={totalAlertas}
         usuarioEmail={usuarioEmail}
         isMobileAberta={menuAberto}
@@ -297,12 +394,18 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isCon
               </button>
               <div>
                 <div style={styles.brand}>{clienteNome}</div>
-                <div style={styles.brandSub}>{tituloAba}</div>
+                <div style={styles.brandSub}>{fazenda.nome} · {tituloAba}</div>
               </div>
             </div>
             <div style={{ ...styles.statusPill, ...(online ? styles.statusOn : styles.statusOff) }}>
               {online ? <Wifi size={13} /> : <WifiOff size={13} />}
             </div>
+          </div>
+          <div style={{ display: "flex", gap: 7, marginTop: 9 }}>
+            <select value={fazenda.id} onChange={(e) => { onSelecionarFazenda(e.target.value); setTab("painel"); }} style={{ ...styles.input, flex: 1, padding: "9px 34px 9px 10px" }} aria-label="Fazenda ativa">
+              {fazendas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+            </select>
+            {podeEditar && <button type="button" onClick={() => setModalFazenda(true)} style={styles.iconBtn} title="Cadastrar outra fazenda" aria-label="Cadastrar outra fazenda"><Plus size={17} /></button>}
           </div>
           {pendentes > 0 && (
             <div style={styles.syncBar}>
@@ -316,7 +419,13 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isCon
 
         {/* Barra fina do desktop: data + status + sincronizar */}
         <div className="show-desktop" style={styles.slimTopbar}>
-          <div style={styles.slimTopbarDate}>{dataHoje}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <select value={fazenda.id} onChange={(e) => { onSelecionarFazenda(e.target.value); setTab("painel"); }} style={{ ...styles.input, width: "auto", minWidth: 190, padding: "8px 34px 8px 10px" }}>
+              {fazendas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+            </select>
+            {podeEditar && <button type="button" onClick={() => setModalFazenda(true)} style={styles.iconBtn} title="Cadastrar outra fazenda"><Plus size={17} /></button>}
+            <div style={styles.slimTopbarDate}>{dataHoje}</div>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             {pendentes > 0 && (
               <button onClick={sincronizar} disabled={sincronizando || !online} style={styles.syncBtn}>
@@ -361,6 +470,25 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, isCon
           )}
         </div>
       </div>
+      {modalFazenda && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(15,35,31,.55)", display: "grid", placeItems: "center", padding: 18 }}>
+          <form onSubmit={salvarNovaFazenda} style={{ ...styles.card, width: "100%", maxWidth: 420, padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div>
+                <div style={styles.listItemTitle}>Cadastrar nova fazenda</div>
+                <div style={styles.listItemSub}>Os dados ficarão separados das outras fazendas.</div>
+              </div>
+              <button type="button" onClick={() => setModalFazenda(false)} style={styles.iconBtn}><X size={17} /></button>
+            </div>
+            <label style={styles.field}>
+              <div style={styles.fieldLabel}>Nome da fazenda</div>
+              <input autoFocus value={nomeNovaFazenda} onChange={(e) => setNomeNovaFazenda(e.target.value)} style={styles.input} placeholder="Ex: Fazenda Santa Maria" />
+            </label>
+            {erroFazenda && <div style={styles.errorBox}>{erroFazenda}</div>}
+            <button type="submit" disabled={salvandoFazenda || !nomeNovaFazenda.trim()} style={styles.primaryBtn}>{salvandoFazenda ? "Salvando..." : "Cadastrar fazenda"}</button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
