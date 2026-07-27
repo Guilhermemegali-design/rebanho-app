@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import { Copy, MapPinned, Save, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { PageHeader, SelectField } from "@/components/UI";
 import ImportExportTab from "@/components/ImportExportTab";
 import { supabase } from "@/lib/supabaseClient";
@@ -21,7 +21,7 @@ function gerarCodigo() {
   return Array.from(bytes, (byte) => chars[byte % chars.length]).join("");
 }
 
-export default function ConfiguracoesTab({ dados, clienteId, consultorId, isConsultor, papelAtual }) {
+export default function ConfiguracoesTab({ dados, clienteId, consultorId, fazenda, onAtualizarFazenda, isConsultor, papelAtual }) {
   const podeGerenciar = isConsultor || papelAtual === "administrador";
   const [usuarios, setUsuarios] = useState([]);
   const [convites, setConvites] = useState([]);
@@ -29,6 +29,14 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, isCons
   const [papel, setPapel] = useState("editor");
   const [mensagem, setMensagem] = useState("");
   const [carregando, setCarregando] = useState(false);
+  const [nomeFazenda, setNomeFazenda] = useState(fazenda?.nome || "");
+  const [salvandoFazenda, setSalvandoFazenda] = useState(false);
+  const [mensagemFazenda, setMensagemFazenda] = useState("");
+
+  useEffect(() => {
+    setNomeFazenda(fazenda?.nome || "");
+    setMensagemFazenda("");
+  }, [fazenda?.id, fazenda?.nome]);
 
   const carregarAcessos = useCallback(async () => {
     if (!podeGerenciar) return;
@@ -91,9 +99,58 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, isCons
     if (!error) carregarAcessos();
   }
 
+  async function salvarFazenda(e) {
+    e.preventDefault();
+    const nome = nomeFazenda.trim();
+    if (!nome || !fazenda?.id || !onAtualizarFazenda) return;
+    setSalvandoFazenda(true);
+    setMensagemFazenda("");
+    try {
+      await onAtualizarFazenda(fazenda.id, { nome });
+      setMensagemFazenda("Nome da fazenda atualizado.");
+    } catch (err) {
+      setMensagemFazenda(err.code === "23505" ? "Já existe uma fazenda com esse nome para este cliente." : err.message);
+    } finally {
+      setSalvandoFazenda(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Configurações" subtitle="Usuários, níveis de acesso e cópia de segurança." />
+
+      <div style={{ ...styles.card, padding: 18, marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
+          <MapPinned size={19} color="#1F4D45" />
+          <strong>Fazenda atual</strong>
+        </div>
+        {!podeGerenciar ? (
+          <div style={styles.emptyHint}>Somente administradores podem editar a fazenda.</div>
+        ) : (
+          <form onSubmit={salvarFazenda} style={{ marginTop: 10 }}>
+            <label style={styles.field}>
+              <div style={styles.fieldLabel}>Nome da fazenda</div>
+              <input
+                type="text"
+                required
+                value={nomeFazenda}
+                onChange={(e) => setNomeFazenda(e.target.value)}
+                placeholder="Ex.: Fazenda Olhos D’Água"
+                style={styles.input}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={salvandoFazenda || !nomeFazenda.trim() || nomeFazenda.trim() === fazenda?.nome}
+              style={{ ...styles.primaryBtn, marginTop: 12 }}
+            >
+              <Save size={16} style={{ verticalAlign: "middle", marginRight: 7 }} />
+              {salvandoFazenda ? "Salvando..." : "Salvar fazenda"}
+            </button>
+            {mensagemFazenda && <div style={styles.errorBox}>{mensagemFazenda}</div>}
+          </form>
+        )}
+      </div>
 
       <div style={{ ...styles.card, padding: 18, marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
