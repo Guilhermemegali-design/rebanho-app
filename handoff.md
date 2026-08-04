@@ -285,7 +285,24 @@ Cliente Supabase: `96f20df8-37b9-452b-9f62-98a54cf8e3c7`.
   diagnóstico (`lib/bluetoothDiagnostico.js`, `acceptAllDevices: true`, não
   usada na tela real de pesagem) que mostra qualquer aparelho por perto e
   quais serviços GATT ele expõe, útil mesmo se a balança não falar o
-  protocolo padrão de peso.
+  protocolo padrão de peso. Depois foi adicionado o mesmo botão de busca
+  também pro bastão (achando que só teria SPP), e o teste real no Android
+  trouxe um dado novo importante:
+- **Teste real em Android (Chrome) com o RS420**: na primeira tentativa, o
+  RS420 **apareceu** na lista de busca BLE do Chrome (ele emite BLE, não só
+  Bluetooth Classic como o teste com iPhone sugeria) e foi selecionável, mas
+  a conexão GATT falhou com "Connection attempt failed" (erro comum de pilha
+  Bluetooth do Android, geralmente resolve tentando de novo). Depois de
+  desligar/religar o aparelho e esquecer o pareamento no Android, ele **parou
+  de aparecer** na busca. Hipótese mais provável: o RS420 só anuncia BLE por
+  uma janela curta logo depois de ligar (ou só em um "modo de configuração"
+  específico, ativado por um botão/combinação no próprio leitor) e depois
+  disso opera só em Bluetooth Classic/SPP para uso normal — o que reforça
+  que o caminho durável continua sendo o app Android nativo com RFCOMM/SPP
+  já planejado, não a busca BLE pelo navegador. Se for testar de novo,
+  tentar buscar **imediatamente** após ligar o aparelho, e procurar no
+  manual/menu do RS420 por um "modo de pareamento" ou "modo de configuração"
+  específico que talvez precise ser ativado antes de ele anunciar por BLE.
 
 ## RLS (permissões)
 
