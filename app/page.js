@@ -165,7 +165,7 @@ function ResolveAcessoOperador({ sessao }) {
   const carregarVinculos = useCallback(async () => {
     const { data } = await supabase
       .from("clientes_usuarios")
-      .select("cliente_id, papel, clientes(id, nome, consultor_id)")
+      .select("cliente_id, papel, fazenda_id, clientes(id, nome, consultor_id)")
       .eq("auth_user_id", sessao.user.id);
     setVinculos(data || []);
   }, [sessao.user.id]);
@@ -179,12 +179,12 @@ function ResolveAcessoOperador({ sessao }) {
 
   if (fazendaEscolhida) {
     const vinculo = vinculos.find((v) => v.cliente_id === fazendaEscolhida.id);
-    return <AmbienteCliente consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} papel={vinculo?.papel || "editor"} onTrocarCliente={() => setFazendaEscolhida(null)} />;
+    return <AmbienteCliente consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} papel={vinculo?.papel || "editor"} fazendaRestrita={vinculo?.fazenda_id || null} onTrocarCliente={() => setFazendaEscolhida(null)} />;
   }
 
   if (vinculos.length === 1) {
     const c = vinculos[0].clientes;
-    return <AmbienteCliente consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} papel={vinculos[0].papel || "editor"} />;
+    return <AmbienteCliente consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} papel={vinculos[0].papel || "editor"} fazendaRestrita={vinculos[0].fazenda_id || null} />;
   }
 
   return (
@@ -255,7 +255,7 @@ function SeletorFazendaConsultor({ sessao }) {
 
 const DATA_FORMATTER = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
-function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", onTrocarCliente }) {
+function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", fazendaRestrita = null, onTrocarCliente }) {
   const [fazendas, setFazendas] = useState(undefined);
   const [fazendaId, setFazendaId] = useState(null);
   const [erro, setErro] = useState("");
@@ -275,9 +275,9 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
     const lista = data || [];
     setFazendas(lista);
     const salva = localStorage.getItem(`rastro-fazenda-${clienteId}`);
-    const escolhida = preferidaId || (lista.some((item) => item.id === salva) ? salva : lista[0]?.id);
+    const escolhida = fazendaRestrita || preferidaId || (lista.some((item) => item.id === salva) ? salva : lista[0]?.id);
     setFazendaId(escolhida || null);
-  }, [clienteId]);
+  }, [clienteId, fazendaRestrita]);
 
   useEffect(() => {
     carregarFazendas();
@@ -324,13 +324,14 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
       onCriarFazenda={criarFazenda}
       isConsultor={isConsultor}
       papel={papel}
+      fazendaRestrita={!!fazendaRestrita}
       onTrocarCliente={onTrocarCliente}
     />
   );
 }
 
 // ---------- App principal (depois de resolvido o acesso) ----------
-function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazenda, fazendas, onSelecionarFazenda, onCriarFazenda, isConsultor, papel = "administrador", onTrocarCliente }) {
+function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazenda, fazendas, onSelecionarFazenda, onCriarFazenda, isConsultor, papel = "administrador", fazendaRestrita = false, onTrocarCliente }) {
   const [tab, setTab] = useState("painel");
   const [menuAberto, setMenuAberto] = useState(false);
   const [animalAbrirId, setAnimalAbrirId] = useState(null);
@@ -341,6 +342,7 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
   const dados = useDadosRebanho(consultorId, clienteId, fazenda.id);
   const { online, sincronizando, pendentes, sincronizar } = useConexao(consultorId);
   const podeEditar = isConsultor || papel === "administrador" || papel === "editor";
+  const podeTrocarFazenda = !fazendaRestrita;
 
   const totalAlertas = useMemo(() => (dados.carregando ? 0 : calcularAlertas(dados).length), [dados]);
   const tituloAba = ABAS_SIDEBAR.find((a) => a.id === tab)?.label || (tab === "configuracoes" ? "Configurações" : "");
@@ -402,10 +404,14 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
             </div>
           </div>
           <div style={{ display: "flex", gap: 7, marginTop: 9 }}>
-            <select value={fazenda.id} onChange={(e) => { onSelecionarFazenda(e.target.value); setTab("painel"); }} style={{ ...styles.input, flex: 1, padding: "9px 34px 9px 10px" }} aria-label="Fazenda ativa">
-              {fazendas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
-            </select>
-            {podeEditar && <button type="button" onClick={() => setModalFazenda(true)} style={styles.iconBtn} title="Cadastrar outra fazenda" aria-label="Cadastrar outra fazenda"><Plus size={17} /></button>}
+            {podeTrocarFazenda ? (
+              <select value={fazenda.id} onChange={(e) => { onSelecionarFazenda(e.target.value); setTab("painel"); }} style={{ ...styles.input, flex: 1, padding: "9px 34px 9px 10px" }} aria-label="Fazenda ativa">
+                {fazendas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+              </select>
+            ) : (
+              <div style={{ ...styles.input, flex: 1, display: "flex", alignItems: "center" }}>{fazenda.nome}</div>
+            )}
+            {podeEditar && podeTrocarFazenda && <button type="button" onClick={() => setModalFazenda(true)} style={styles.iconBtn} title="Cadastrar outra fazenda" aria-label="Cadastrar outra fazenda"><Plus size={17} /></button>}
           </div>
           {pendentes > 0 && (
             <div style={styles.syncBar}>
@@ -420,10 +426,14 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
         {/* Barra fina do desktop: data + status + sincronizar */}
         <div className="show-desktop" style={styles.slimTopbar}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <select value={fazenda.id} onChange={(e) => { onSelecionarFazenda(e.target.value); setTab("painel"); }} style={{ ...styles.input, width: "auto", minWidth: 190, padding: "8px 34px 8px 10px" }}>
-              {fazendas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
-            </select>
-            {podeEditar && <button type="button" onClick={() => setModalFazenda(true)} style={styles.iconBtn} title="Cadastrar outra fazenda"><Plus size={17} /></button>}
+            {podeTrocarFazenda ? (
+              <select value={fazenda.id} onChange={(e) => { onSelecionarFazenda(e.target.value); setTab("painel"); }} style={{ ...styles.input, width: "auto", minWidth: 190, padding: "8px 34px 8px 10px" }}>
+                {fazendas.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+              </select>
+            ) : (
+              <div style={{ ...styles.input, width: "auto", minWidth: 190, display: "flex", alignItems: "center" }}>{fazenda.nome}</div>
+            )}
+            {podeEditar && podeTrocarFazenda && <button type="button" onClick={() => setModalFazenda(true)} style={styles.iconBtn} title="Cadastrar outra fazenda"><Plus size={17} /></button>}
             <div style={styles.slimTopbarDate}>{dataHoje}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -465,7 +475,7 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
               {tab === "pesagens" && <PesagensTab dados={dados} />}
               {tab === "sanidade" && <SanidadeTab dados={dados} />}
               {tab === "alertas" && <AlertasTab dados={dados} />}
-              {tab === "configuracoes" && <ConfiguracoesTab dados={dados} clienteId={clienteId} consultorId={consultorId} isConsultor={isConsultor} papelAtual={papel} />}
+              {tab === "configuracoes" && <ConfiguracoesTab dados={dados} clienteId={clienteId} consultorId={consultorId} isConsultor={isConsultor} papelAtual={papel} fazendas={fazendas} />}
             </>
           )}
         </div>

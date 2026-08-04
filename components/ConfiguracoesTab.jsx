@@ -21,19 +21,22 @@ function gerarCodigo() {
   return Array.from(bytes, (byte) => chars[byte % chars.length]).join("");
 }
 
-export default function ConfiguracoesTab({ dados, clienteId, consultorId, isConsultor, papelAtual }) {
+export default function ConfiguracoesTab({ dados, clienteId, consultorId, isConsultor, papelAtual, fazendas = [] }) {
   const podeGerenciar = isConsultor || papelAtual === "administrador";
+  const temMaisDeUmaFazenda = fazendas.length > 1;
+  const rotuloFazenda = (fazendaId) => fazendas.find((f) => f.id === fazendaId)?.nome || "Todas as fazendas";
   const [usuarios, setUsuarios] = useState([]);
   const [convites, setConvites] = useState([]);
   const [email, setEmail] = useState("");
   const [papel, setPapel] = useState("editor");
+  const [fazendaConvite, setFazendaConvite] = useState("");
   const [mensagem, setMensagem] = useState("");
   const [carregando, setCarregando] = useState(false);
 
   const carregarAcessos = useCallback(async () => {
     if (!podeGerenciar) return;
     const [{ data: listaUsuarios, error: erroUsuarios }, { data: listaConvites, error: erroConvites }] = await Promise.all([
-      supabase.from("clientes_usuarios").select("id, auth_user_id, email, papel, criado_em").eq("cliente_id", clienteId).order("criado_em"),
+      supabase.from("clientes_usuarios").select("id, auth_user_id, email, papel, fazenda_id, criado_em").eq("cliente_id", clienteId).order("criado_em"),
       supabase.from("rebanho_convites_usuarios").select("*").eq("cliente_id", clienteId).order("criado_em", { ascending: false }),
     ]);
     if (erroUsuarios || erroConvites) {
@@ -59,10 +62,12 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, isCons
         consultor_id: consultorId,
         email: email.trim().toLowerCase() || null,
         papel,
+        fazenda_id: fazendaConvite || null,
         codigo,
       });
       if (error) throw error;
       setEmail("");
+      setFazendaConvite("");
       setMensagem(`Acesso criado. Envie o código ${codigo} para o usuário.`);
       await carregarAcessos();
     } catch (err) {
@@ -75,6 +80,12 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, isCons
   async function alterarPapel(usuario, novoPapel) {
     const { error } = await supabase.from("clientes_usuarios").update({ papel: novoPapel }).eq("id", usuario.id);
     setMensagem(error ? error.message : "Nível de acesso atualizado.");
+    if (!error) carregarAcessos();
+  }
+
+  async function alterarFazendaUsuario(usuario, novaFazendaId) {
+    const { error } = await supabase.from("clientes_usuarios").update({ fazenda_id: novaFazendaId || null }).eq("id", usuario.id);
+    setMensagem(error ? error.message : "Acesso à fazenda atualizado.");
     if (!error) carregarAcessos();
   }
 
@@ -110,6 +121,14 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, isCons
                 <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usuario@exemplo.com" style={styles.input} />
               </label>
               <SelectField label="Nível de acesso" value={papel} onChange={setPapel} options={PAPEIS} />
+              {temMaisDeUmaFazenda && (
+                <SelectField
+                  label="Acesso a"
+                  value={fazendaConvite}
+                  onChange={setFazendaConvite}
+                  options={[{ value: "", label: "Todas as fazendas" }, ...fazendas.map((f) => ({ value: f.id, label: f.nome }))]}
+                />
+              )}
               <button type="submit" disabled={carregando} style={{ ...styles.primaryBtn, marginTop: 12 }}>
                 <UserPlus size={16} style={{ verticalAlign: "middle", marginRight: 7 }} />
                 {carregando ? "Criando..." : "Cadastrar acesso"}
@@ -126,11 +145,17 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, isCons
               <div key={usuario.id} style={{ ...styles.rowCard, alignItems: "flex-end", flexWrap: "wrap" }}>
                 <div style={{ flex: "1 1 180px", minWidth: 0 }}>
                   <div style={styles.listItemTitle}>{usuario.email || "Usuário cadastrado"}</div>
-                  <div style={styles.listItemSub}>{rotuloPapel(usuario.papel)}</div>
+                  <div style={styles.listItemSub}>{rotuloPapel(usuario.papel)}{temMaisDeUmaFazenda ? ` · ${rotuloFazenda(usuario.fazenda_id)}` : ""}</div>
                 </div>
                 <select value={usuario.papel} onChange={(e) => alterarPapel(usuario, e.target.value)} style={styles.tableFilterSelect}>
                   {PAPEIS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
+                {temMaisDeUmaFazenda && (
+                  <select value={usuario.fazenda_id || ""} onChange={(e) => alterarFazendaUsuario(usuario, e.target.value)} style={styles.tableFilterSelect}>
+                    <option value="">Todas as fazendas</option>
+                    {fazendas.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                )}
                 <button onClick={() => removerUsuario(usuario)} style={styles.iconDangerBtn} title="Remover acesso"><Trash2 size={15} /></button>
               </div>
             ))}
@@ -141,7 +166,9 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, isCons
               <div key={convite.id} style={{ ...styles.rowCard, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={styles.listItemTitle}>{convite.email}</div>
-                  <div style={styles.listItemSub}>{rotuloPapel(convite.papel)} · Código {convite.codigo}</div>
+                  <div style={styles.listItemSub}>
+                    {rotuloPapel(convite.papel)}{temMaisDeUmaFazenda ? ` · ${rotuloFazenda(convite.fazenda_id)}` : ""} · Código {convite.codigo}
+                  </div>
                 </div>
                 <button onClick={() => navigator.clipboard.writeText(convite.codigo).then(() => setMensagem("Código copiado."))} style={styles.iconEditBtn} title="Copiar código"><Copy size={15} /></button>
                 <button onClick={() => cancelarConvite(convite)} style={styles.iconDangerBtn} title="Cancelar convite"><Trash2 size={15} /></button>

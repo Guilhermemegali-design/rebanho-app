@@ -1,6 +1,6 @@
 # Rebanho — Handoff
 
-Última atualização: 2026-07-24
+Última atualização: 2026-08-04
 
 ## O que é
 
@@ -41,9 +41,9 @@ automático no Vercel a cada push — mesmo modelo do Confinamento-main).
   existentes; todas as tabelas novas usam prefixo `rebanho_` pra não colidir
   com as tabelas `*_confinamento`/`*_lote` do app irmão.
 - Deploy: **git real** (diferente do Consultoria-main, que ainda é manual
-  via zip) — o usuário tem GitHub Desktop/terminal e faz `git push` ele
-  mesmo depois que eu commito localmente. Eu não tenho credenciais de push
-  configuradas neste ambiente.
+  via zip). Push para `main` dispara automaticamente a produção na Vercel.
+  Este ambiente já conseguiu commitar, enviar `HEAD:main` e acompanhar o
+  deployment do projeto `rebanho-app` até o estado `READY`.
 - Offline-first (mesmo padrão do Consultoria-main, `idb`) só para
   **pesagens, movimentações e procedimentos sanitários** — cadastro de
   animal/local/lote/fornecedor exige conexão (evita o problema de
@@ -209,6 +209,73 @@ operador aos animais da própria fazenda.
   abastecimentos, mapa, pesagens, movimentações e sanidade são filtrados
   pela fazenda ativa. A migração criou uma `Fazenda principal` para cada
   cliente e vinculou nela todos os dados anteriores sem apagá-los.
+- Um usuário pode ser restrito a **apenas um retiro** do cliente (ex: Belmont
+  tem "Fazenda Ponte" e outra, e dá pra convidar alguém só para a Ponte).
+  Em Configurações → Usuários e acessos, o campo "Acesso a" (só aparece
+  quando o cliente já tem mais de uma fazenda) define isso no convite; para
+  usuários já vinculados há um segundo seletor ao lado do nível de acesso.
+  `fazenda_id` nulo em `clientes_usuarios`/`rebanho_convites_usuarios`
+  continua significando acesso a todas as fazendas do cliente (padrão
+  anterior, preservado). Um operador restrito não vê o seletor de fazenda
+  nem o botão de criar nova fazenda — fica travado na sua. A restrição é
+  reforçada no banco (não só na tela): `private.rebanho_fazenda_permitida` e
+  `private.rebanho_pode_editar_fazenda` (migração
+  `add_restricao_fazenda_usuario.sql`) substituíram as checagens antigas
+  baseadas só em `cliente_id` nas policies de todas as tabelas com
+  `fazenda_id`, então mesmo chamando a API direto o operador restrito não
+  enxerga nem grava dado da outra fazenda. Criar uma fazenda nova exige
+  acesso a todas as fazendas do cliente (`private.rebanho_tem_acesso_total`)
+  — um usuário restrito a um retiro não pode criar um terceiro.
+- Configurações possui o card **Fazenda atual**, no qual consultor ou
+  administrador pode renomear a unidade sem alterar seus dados. O nome é
+  atualizado imediatamente no topo e na barra lateral.
+- Fazendas com muitos animais são carregadas por paginação de 750 registros,
+  com ordenação determinística. Pesagens, movimentações e sanidade são
+  consultadas diretamente por `fazenda_id`; a atualização do cache offline
+  ocorre em segundo plano e não bloqueia mais a abertura da tela.
+- No painel geral, os lotes ficam imediatamente abaixo dos indicadores e
+  antes dos alertas. Cada lote é um botão com quantidade de animais e abre
+  seu painel individual. O cartão “Lotes ativos” leva até essa lista e o
+  painel geral resume apenas cinco alertas.
+
+## Dados reais importados — Belmont Agropecuaria
+
+Cliente Supabase: `96f20df8-37b9-452b-9f62-98a54cf8e3c7`.
+
+- **Fazenda Olhos D'Água** (`4a01a37c-ab39-443e-a023-88ba4f84ec0c`):
+  1.888 animais, 14 lotes, 2.512 pesagens e 1.888 entradas. Todos os animais
+  e lotes estão vinculados ao local `Fazenda Olhos D agua`; 32 animais não
+  tinham RFID na planilha original.
+- **Fazenda Ponte** (`2123a638-9313-4c31-bcdc-ce306b7a5ee2`): 1.217 animais,
+  13 lotes, 2.318 pesagens, 1.217 entradas e 1.217 participações de lote
+  ativas. Todos estão vinculados ao local `Fazenda Ponte`; 70 animais não
+  tinham RFID na planilha original.
+- As duas cargas são idempotentes pelo brinco visual dentro da fazenda e
+  usam `client_uuid` determinístico nas pesagens e entradas para impedir
+  duplicação em uma eventual repetição.
+
+## Hardware testado e decisão sobre aplicativo nativo
+
+- O teste real foi feito com **Allflex RS420**, **Tru-Test S3** e **iPhone**.
+  A integração direta não funcionou por limitação da versão web, não por
+  erro do operador.
+- O RS420 usa Bluetooth Classic SPP/iAP. No iPhone, um site/PWA não recebe
+  esse protocolo. A versão iOS exigirá `ExternalAccessory`, protocolo iAP
+  informado/autorizado pela Allflex/Datamars e um plugin nativo em Swift.
+- O S3 usa Bluetooth Low Energy e expõe o perfil padrão de balança
+  (`0x181D`/`0x2A9D`), mas o acesso direto no iPhone também exige aplicativo
+  nativo com Core Bluetooth.
+- Caminho escolhido para quando os equipamentos estiverem novamente
+  disponíveis: iniciar primeiro uma versão **Android nativa** aproveitando
+  a interface React por Capacitor. Um plugin Kotlin conectará o RS420 por
+  RFCOMM/SPP e o S3 por BLE/GATT; eventos `rfidRead`, `weightChanged` e
+  `stableWeight` alimentarão a tela atual de pesagem.
+- A versão Android terá SQLite/fila local, operação integral sem sinal e
+  sincronização com o mesmo Supabase. O primeiro artefato será um APK para
+  teste no curral; publicação na Play Store vem depois da validação física.
+- Não iniciar a implementação definitiva dos protocolos sem ter um Android,
+  o RS420 e o S3 juntos para testar conexão, formato das mensagens,
+  estabilidade do peso e reconexão.
 
 ## RLS (permissões)
 
@@ -246,15 +313,9 @@ auditoria), e a função da trigger era chamável direto via
 
 ## Pendências / coisas para prestar atenção
 
-- **Balança Bluetooth nunca testada com hardware real**. O código tenta o
-  padrão Bluetooth SIG; Coimma/Tru-Test podem (provável) usar protocolo
-  proprietário que não vai responder — nesse caso o app já cai
-  automaticamente pro campo de peso manual, mas o ajuste fino por marca só
-  dá pra fazer com o equipamento físico em mãos.
-- **Bastão RFID também nunca testado com hardware real** — a lógica
-  (diferenciar digitação rápida de humana) foi validada simulando com
-  teclado normal digitando rápido, não com um Animal Tag/Allflex/Tru-Test
-  de verdade.
+- **Hardware foi testado com RS420 + S3 + iPhone e não conectou na PWA.**
+  A causa e o plano nativo estão documentados na seção anterior. A entrada
+  manual continua sendo o fallback seguro da versão web.
 - **`rebanho_lote_participacoes`** existe no schema mas **nenhuma tela grava
   nela** — o "lote atual" e o histórico de onde cada animal passou já
   aparecem certinho via `rebanho_movimentacoes` + `lote_atual_id`, então
@@ -267,15 +328,15 @@ auditoria), e a função da trigger era chamável direto via
   console) — resolvido apagando `.next/` e reiniciando o servidor. Se isso
   acontecer de novo: **não é bug do app**, é cache de build do Next
   dessincronizado; `rm -rf .next` + reiniciar resolve.
-- **Ícones do PWA são os do Consultoria-main** (copiados como placeholder
-  na primeira versão) — nunca foi pedido um ícone próprio pro Rebanho.
+- Os ícones do PWA já usam a marca própria RASTRO; ao alterar novamente,
+  incrementar a versão dos arquivos/cache para atualizar instalações antigas.
 - **`.env.local` já teve um problema real de caractere inválido** ao ser
   colado no Vercel a partir do chat (erro "non ISO-8859-1 code point" no
   fetch, aparecendo como "Type error" truncado pela tradução automática do
   Safari) — resolvido copiando os valores direto do arquivo `.env.local`
   em vez de copiar do chat. Se o login voltar a falhar silenciosamente,
   suspeitar disso primeiro.
-- Nenhum teste com usuário real/dados reais de produção ainda foi
-  confirmado como concluído nesta sessão — o usuário estava no meio do
-  processo de cadastrar o primeiro cliente de teste ("Adelmilson") quando
-  a sessão avançou pras últimas features.
+- Já existem dados reais de produção: Belmont Agropecuaria, nas fazendas
+  Olhos D'Água e Ponte. Alterações de schema, exclusões e importações futuras
+  precisam preservar rigorosamente o isolamento por `cliente_id` e
+  `fazenda_id`.
