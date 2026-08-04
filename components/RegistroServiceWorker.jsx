@@ -5,9 +5,30 @@ import { useEffect } from "react";
 export default function RegistroServiceWorker() {
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
-        console.error("Erro ao registrar Service Worker:", err);
-      });
+      let mudouControlador = false;
+      const liberarProximaAtualizacao = window.setTimeout(
+        () => sessionStorage.removeItem("rastro-sw-recarregado"),
+        5000
+      );
+      const aoMudarControlador = () => {
+        if (mudouControlador || sessionStorage.getItem("rastro-sw-recarregado") === "1") return;
+        mudouControlador = true;
+        sessionStorage.setItem("rastro-sw-recarregado", "1");
+        window.location.reload();
+      };
+
+      navigator.serviceWorker.addEventListener("controllerchange", aoMudarControlador);
+      navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .then((registro) => registro.update())
+        .catch((err) => {
+          console.error("Erro ao registrar Service Worker:", err);
+        });
+
+      return () => {
+        window.clearTimeout(liberarProximaAtualizacao);
+        navigator.serviceWorker.removeEventListener("controllerchange", aoMudarControlador);
+      };
     }
   }, []);
 
