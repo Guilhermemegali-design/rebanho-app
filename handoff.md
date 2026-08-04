@@ -276,6 +276,16 @@ Cliente Supabase: `96f20df8-37b9-452b-9f62-98a54cf8e3c7`.
 - Não iniciar a implementação definitiva dos protocolos sem ter um Android,
   o RS420 e o S3 juntos para testar conexão, formato das mensagens,
   estabilidade do peso e reconexão.
+- Card **Testar leitor RFID e balança** em Configurações
+  (`components/TesteEquipamentos.jsx`) dá pra testar os dois pela PWA no
+  Chrome do Android antes de partir pro app nativo: pro bastão, usa o mesmo
+  `useRfidScanner` da produção (só funciona se o bastão estiver em modo
+  teclado/HID — não vai detectar o RS420 enquanto ele estiver em SPP/iAP,
+  isso é esperado); pra balança, usa uma busca Bluetooth própria de
+  diagnóstico (`lib/bluetoothDiagnostico.js`, `acceptAllDevices: true`, não
+  usada na tela real de pesagem) que mostra qualquer aparelho por perto e
+  quais serviços GATT ele expõe, útil mesmo se a balança não falar o
+  protocolo padrão de peso.
 
 ## RLS (permissões)
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Copy, MapPinned, Save, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { PageHeader, SelectField } from "@/components/UI";
 import ImportExportTab from "@/components/ImportExportTab";
+import TesteEquipamentos from "@/components/TesteEquipamentos";
 import { supabase } from "@/lib/supabaseClient";
 import { styles } from "@/lib/styles";
 
@@ -162,6 +163,8 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, fazend
           </form>
         )}
       </div>
+
+      <TesteEquipamentos />
 
       <div style={{ ...styles.card, padding: 18, marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
