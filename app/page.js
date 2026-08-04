@@ -300,6 +300,19 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
     return data;
   }
 
+  async function atualizarFazenda(id, mudancas) {
+    const { data, error } = await supabase
+      .from("rebanho_fazendas")
+      .update({ ...mudancas, atualizado_em: new Date().toISOString() })
+      .eq("id", id)
+      .eq("cliente_id", clienteId)
+      .select("id, nome, ativo")
+      .single();
+    if (error) throw error;
+    setFazendas((atuais) => atuais.map((item) => item.id === id ? data : item));
+    return data;
+  }
+
   if (fazendas === undefined) return <div style={styles.loadingScreen}>Carregando fazendas...</div>;
   if (erro || !fazendaId) return (
     <div style={styles.loginScreen}>
@@ -322,6 +335,7 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
       fazendas={fazendas}
       onSelecionarFazenda={selecionarFazenda}
       onCriarFazenda={criarFazenda}
+      onAtualizarFazenda={atualizarFazenda}
       isConsultor={isConsultor}
       papel={papel}
       fazendaRestrita={!!fazendaRestrita}
@@ -331,7 +345,7 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
 }
 
 // ---------- App principal (depois de resolvido o acesso) ----------
-function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazenda, fazendas, onSelecionarFazenda, onCriarFazenda, isConsultor, papel = "administrador", fazendaRestrita = false, onTrocarCliente }) {
+function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazenda, fazendas, onSelecionarFazenda, onCriarFazenda, onAtualizarFazenda, isConsultor, papel = "administrador", fazendaRestrita = false, onTrocarCliente }) {
   const [tab, setTab] = useState("painel");
   const [menuAberto, setMenuAberto] = useState(false);
   const [animalAbrirId, setAnimalAbrirId] = useState(null);
@@ -475,7 +489,18 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
               {tab === "pesagens" && <PesagensTab dados={dados} />}
               {tab === "sanidade" && <SanidadeTab dados={dados} />}
               {tab === "alertas" && <AlertasTab dados={dados} />}
-              {tab === "configuracoes" && <ConfiguracoesTab dados={dados} clienteId={clienteId} consultorId={consultorId} isConsultor={isConsultor} papelAtual={papel} fazendas={fazendas} />}
+              {tab === "configuracoes" && (
+                <ConfiguracoesTab
+                  dados={dados}
+                  clienteId={clienteId}
+                  consultorId={consultorId}
+                  fazenda={fazenda}
+                  fazendas={fazendas}
+                  onAtualizarFazenda={onAtualizarFazenda}
+                  isConsultor={isConsultor}
+                  papelAtual={papel}
+                />
+              )}
             </>
           )}
         </div>

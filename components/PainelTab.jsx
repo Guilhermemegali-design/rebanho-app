@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { styles } from "@/lib/styles";
 import { formatKg, formatDataBR, calcularGmd } from "@/lib/format";
 import { calcularAlertas } from "@/lib/alerts";
@@ -10,6 +10,7 @@ import { EmptyHint, PageHeader } from "@/components/UI";
 export default function PainelTab({ dados, onAbrirAnimal }) {
   const { locais, lotes } = dados;
   const [loteSelecionadoId, setLoteSelecionadoId] = useState(null);
+  const lotesSectionRef = useRef(null);
   const loteSelecionado = lotes.find((l) => l.id === loteSelecionadoId) || null;
 
   // Painel geral olha a fazenda inteira; clicar num lote em "Distribuição
@@ -55,7 +56,7 @@ export default function PainelTab({ dados, onAbrirAnimal }) {
   // Alertas calculados na hora — nunca ficam desatualizados porque não
   // existe uma tabela separada de alertas pra sincronizar.
   const todosAlertas = useMemo(() => calcularAlertas({ animais, pesagens, procedimentos }), [animais, pesagens, procedimentos]);
-  const alertas = todosAlertas.slice(0, 20);
+  const alertas = todosAlertas.slice(0, 5);
 
   const lotesAtivos = lotes.filter((l) => l.situacao === "ativo");
   const animaisDoLote = useMemo(() => {
@@ -102,11 +103,43 @@ export default function PainelTab({ dados, onAbrirAnimal }) {
           <div style={styles.kpiHeader}><TrendingUp size={14} /> GMD médio</div>
           <div style={styles.kpiValor}>{gmdMedio != null ? `${gmdMedio.toFixed(3)} kg/d` : "—"}</div>
         </div>
-        <div style={styles.kpiCard}>
+        <button
+          type="button"
+          onClick={() => {
+            if (loteSelecionado) setLoteSelecionadoId(null);
+            else lotesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+          style={{ ...styles.kpiCard, border: "1px solid #E8E5DE", textAlign: "left", cursor: "pointer" }}
+          aria-label={loteSelecionado ? "Voltar para todos os lotes" : "Ver lotes ativos"}
+        >
           <div style={styles.kpiHeader}><Syringe size={14} /> {loteSelecionado ? "Lote" : "Lotes ativos"}</div>
           <div style={styles.kpiValor}>{loteSelecionado ? 1 : lotesAtivos.length}</div>
-        </div>
+          <div style={{ ...styles.listItemSub, marginTop: 4 }}>{loteSelecionado ? "Voltar aos lotes" : "Clique para escolher um lote"}</div>
+        </button>
       </div>
+
+      {!loteSelecionado && (
+        <div ref={lotesSectionRef}>
+          <div style={styles.sectionTitle}>Lotes — clique para abrir</div>
+          {lotesAtivos.length === 0 && <EmptyHint text="Nenhum lote cadastrado ainda." />}
+          {lotesAtivos.map((lote) => {
+            const qtd = dados.animais.filter((a) => a.lote_atual_id === lote.id && a.situacao === "ativo").length;
+            const local = locais.find((l) => l.id === lote.local_id);
+            return (
+              <button key={lote.id} type="button" style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }} onClick={() => setLoteSelecionadoId(lote.id)}>
+                <div style={{ flex: 1 }}>
+                  <div style={styles.listItemTitle}>{lote.nome}</div>
+                  <div style={styles.listItemSub}>{local ? local.nome : "Sem local definido"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontWeight: 800, fontSize: 16 }}>{qtd}</div>
+                  <ChevronRight size={18} color="#6F7773" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {loteSelecionado && (
         <>
@@ -192,25 +225,10 @@ export default function PainelTab({ dados, onAbrirAnimal }) {
           </div>
         </div>
       ))}
-
-      {!loteSelecionado && (
-        <>
-          <div style={styles.sectionTitle}>Distribuição por lote</div>
-          {lotesAtivos.length === 0 && <EmptyHint text="Nenhum lote cadastrado ainda." />}
-          {lotesAtivos.map((lote) => {
-            const qtd = dados.animais.filter((a) => a.lote_atual_id === lote.id && a.situacao === "ativo").length;
-            const local = locais.find((l) => l.id === lote.local_id);
-            return (
-              <button key={lote.id} style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }} onClick={() => setLoteSelecionadoId(lote.id)}>
-                <div style={{ flex: 1 }}>
-                  <div style={styles.listItemTitle}>{lote.nome}</div>
-                  <div style={styles.listItemSub}>{local ? local.nome : "Sem local definido"}</div>
-                </div>
-                <div style={{ fontWeight: 800, fontSize: 16 }}>{qtd}</div>
-              </button>
-            );
-          })}
-        </>
+      {todosAlertas.length > alertas.length && (
+        <div style={{ ...styles.listItemSub, marginTop: 10 }}>
+          Exibindo 5 de {todosAlertas.length} alertas. Consulte a aba Alertas para ver todos.
+        </div>
       )}
     </div>
   );
