@@ -1,12 +1,66 @@
 "use client";
 
 import { useState } from "react";
-import { Radio, Scale as ScaleIcon, Trash2 } from "lucide-react";
+import { Bluetooth, Radio, Scale as ScaleIcon, Trash2 } from "lucide-react";
 import { styles } from "@/lib/styles";
 import { useRfidScanner } from "@/lib/rfid";
 import { useBluetoothDiagnostico } from "@/lib/bluetoothDiagnostico";
 
 const HORA_FORMATTER = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+// Busca Bluetooth genérica (BLE, acceptAllDevices) reaproveitada tanto pra
+// balança quanto pro bastão — cada chamador passa sua própria instância de
+// useBluetoothDiagnostico(), então os dois têm estado independente.
+function BuscaBluetooth({ icone: Icone, rotulo, diag, avisoSemPeso }) {
+  if (!diag.suportado) {
+    return (
+      <div style={styles.emptyHint}>
+        Este navegador não suporta Bluetooth direto. No Android use o Chrome; no
+        iPhone não existe suporte em nenhum navegador.
+      </div>
+    );
+  }
+  return (
+    <>
+      {diag.status !== "conectado" ? (
+        <button
+          onClick={diag.buscar}
+          disabled={diag.status === "buscando"}
+          style={{ ...styles.primaryBtn, marginTop: 4 }}
+        >
+          <Icone size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />
+          {diag.status === "buscando" ? "Buscando..." : rotulo}
+        </button>
+      ) : (
+        <button onClick={diag.desconectar} style={{ ...styles.secondaryBtn, marginTop: 4 }}>
+          Desconectar
+        </button>
+      )}
+      {diag.erro && <div style={styles.errorBox}>{diag.erro}</div>}
+      {diag.dispositivo && (
+        <div style={{ fontSize: 13, marginTop: 4 }}>
+          <div>
+            <strong>Aparelho:</strong> {diag.dispositivo}
+          </div>
+          <div>
+            <strong>Status:</strong> {diag.status === "conectado" ? "Conectado" : "Desconectado"}
+          </div>
+          {diag.servicosEncontrados.length > 0 && (
+            <div>
+              <strong>Serviços identificados:</strong> {diag.servicosEncontrados.join(", ")}
+            </div>
+          )}
+          {diag.status === "conectado" && diag.pesoReconhecido === false && avisoSemPeso && (
+            <div style={{ ...styles.errorBox, marginTop: 8 }}>{avisoSemPeso}</div>
+          )}
+          {diag.peso != null && (
+            <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8, color: "#1F4D45" }}>{diag.peso}</div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function TesteEquipamentos() {
   const [leituras, setLeituras] = useState([]);
@@ -14,6 +68,7 @@ export default function TesteEquipamentos() {
     setLeituras((atuais) => [{ tag, hora: HORA_FORMATTER.format(new Date()) }, ...atuais].slice(0, 10));
   });
 
+  const bastao = useBluetoothDiagnostico();
   const balanca = useBluetoothDiagnostico();
 
   return (
@@ -30,13 +85,12 @@ export default function TesteEquipamentos() {
 
       <div style={{ ...styles.rowCard, flexDirection: "column", alignItems: "stretch", gap: 8 }}>
         <div style={{ fontWeight: 700 }}>Bastão RFID</div>
+
         <div style={{ fontSize: 12, color: "#8A8A86", lineHeight: 1.4 }}>
-          Pareie o bastão uma vez nas configurações de Bluetooth do Android (fora deste
-          app, é um passo do sistema operacional). Depois, com esta página aberta,
-          aproxime um brinco do leitor e aperte o gatilho — não precisa clicar em nenhum
-          campo antes. Isso só funciona se o bastão estiver configurado em <strong>modo
-          teclado (HID)</strong>; procure essa opção no menu do próprio aparelho ou no
-          manual dele.
+          <strong>Caminho 1 — modo teclado (HID):</strong> pareie o bastão nas
+          configurações de Bluetooth do Android (fora deste app) e aproxime um brinco
+          do leitor. Só funciona se o bastão tiver essa opção ligada — procure "modo
+          teclado" ou "HID" no menu ou manual dele.
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
           <span
@@ -51,14 +105,7 @@ export default function TesteEquipamentos() {
           {lendo ? "Lendo..." : "Aguardando leitura"}
         </div>
         {leituras.length === 0 ? (
-          <div style={styles.emptyHint}>
-            Nenhuma leitura ainda. Se aproximar o brinco e nada aparecer aqui, o bastão
-            pode estar em <strong>modo serial (SPP)</strong> em vez de teclado — foi o que
-            aconteceu no teste com o Allflex RS420 (ele usa Bluetooth Classic SPP/iAP, que
-            nenhum navegador consegue ler, nem no Android). Nesse caso a leitura
-            automática só vai funcionar num aplicativo nativo (já é o plano documentado no
-            handoff.md); por enquanto, digite o brinco manualmente.
-          </div>
+          <div style={styles.emptyHint}>Nenhuma leitura ainda.</div>
         ) : (
           <div>
             {leituras.map((item, i) => (
@@ -84,67 +131,39 @@ export default function TesteEquipamentos() {
             Limpar histórico
           </button>
         )}
+
+        <div style={{ fontSize: 12, color: "#8A8A86", lineHeight: 1.4, marginTop: 10, borderTop: "1px solid #EFEDE7", paddingTop: 10 }}>
+          <strong>Caminho 2 — buscar por Bluetooth:</strong> toque em buscar e veja se o
+          leitor aparece na lista do Chrome. O <strong>Allflex RS420</strong> usa
+          Bluetooth Classic (SPP/iAP), que essa busca (só enxerga BLE) provavelmente
+          não vai encontrar — mas vale tentar: se ele também tiver rádio BLE, aparece
+          aqui e já ajuda a mapear os serviços dele pra quando o app nativo for feito.
+        </div>
+        <BuscaBluetooth icone={Bluetooth} rotulo="Buscar bastão por perto" diag={bastao} />
+        {bastao.status === "parado" && bastao.dispositivo === null && !bastao.erro && (
+          <div style={{ fontSize: 12, color: "#8A8A86" }}>
+            Se não aparecer nada na lista ao tocar em buscar, é o esperado: confirma que
+            o RS420 só fala Bluetooth Classic, e a leitura automática vai exigir o app
+            Android nativo já planejado (ver handoff.md). Por enquanto, digite o brinco
+            manualmente.
+          </div>
+        )}
       </div>
 
       <div style={{ ...styles.rowCard, flexDirection: "column", alignItems: "stretch", gap: 8, marginTop: 12 }}>
         <div style={{ fontWeight: 700 }}>Balança Bluetooth</div>
-        {!balanca.suportado ? (
-          <div style={styles.emptyHint}>
-            Este navegador não suporta Bluetooth direto. No Android use o Chrome; no
-            iPhone não existe suporte em nenhum navegador — digite o peso manualmente.
-          </div>
-        ) : (
-          <>
-            <div style={{ fontSize: 12, color: "#8A8A86", lineHeight: 1.4 }}>
-              Toque em buscar e escolha a balança na lista que o Chrome mostrar (ela
-              precisa estar ligada e por perto). Essa busca aceita qualquer aparelho
-              Bluetooth, então dá pra achar a balança mesmo que ela não use o protocolo
-              padrão de peso.
-            </div>
-            {balanca.status !== "conectado" ? (
-              <button
-                onClick={balanca.buscar}
-                disabled={balanca.status === "buscando"}
-                style={{ ...styles.primaryBtn, marginTop: 4 }}
-              >
-                <ScaleIcon size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />
-                {balanca.status === "buscando" ? "Buscando..." : "Buscar balança por perto"}
-              </button>
-            ) : (
-              <button onClick={balanca.desconectar} style={{ ...styles.secondaryBtn, marginTop: 4 }}>
-                Desconectar
-              </button>
-            )}
-            {balanca.erro && <div style={styles.errorBox}>{balanca.erro}</div>}
-            {balanca.dispositivo && (
-              <div style={{ fontSize: 13, marginTop: 4 }}>
-                <div>
-                  <strong>Aparelho:</strong> {balanca.dispositivo}
-                </div>
-                <div>
-                  <strong>Status:</strong> {balanca.status === "conectado" ? "Conectado" : "Desconectado"}
-                </div>
-                {balanca.servicosEncontrados.length > 0 && (
-                  <div>
-                    <strong>Serviços identificados:</strong> {balanca.servicosEncontrados.join(", ")}
-                  </div>
-                )}
-                {balanca.status === "conectado" && balanca.pesoReconhecido === false && (
-                  <div style={{ ...styles.errorBox, marginTop: 8 }}>
-                    Conectou, mas não reconheci o formato do peso — essa balança
-                    provavelmente usa um protocolo próprio do fabricante, não o padrão do
-                    Bluetooth SIG. Guarde o nome do aparelho e os serviços acima; com isso
-                    dá pra ajustar o app depois. Por enquanto, digite o peso manualmente
-                    nas pesagens.
-                  </div>
-                )}
-                {balanca.peso != null && (
-                  <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8, color: "#1F4D45" }}>{balanca.peso}</div>
-                )}
-              </div>
-            )}
-          </>
-        )}
+        <div style={{ fontSize: 12, color: "#8A8A86", lineHeight: 1.4 }}>
+          Toque em buscar e escolha a balança na lista que o Chrome mostrar (ela
+          precisa estar ligada e por perto). Essa busca aceita qualquer aparelho
+          Bluetooth, então dá pra achar a balança mesmo que ela não use o protocolo
+          padrão de peso.
+        </div>
+        <BuscaBluetooth
+          icone={ScaleIcon}
+          rotulo="Buscar balança por perto"
+          diag={balanca}
+          avisoSemPeso="Conectou, mas não reconheci o formato do peso — essa balança provavelmente usa um protocolo próprio do fabricante, não o padrão do Bluetooth SIG. Guarde o nome do aparelho e os serviços acima; com isso dá pra ajustar o app depois. Por enquanto, digite o peso manualmente nas pesagens."
+        />
       </div>
     </div>
   );
