@@ -304,6 +304,60 @@ Cliente Supabase: `96f20df8-37b9-452b-9f62-98a54cf8e3c7`.
   manual/menu do RS420 por um "modo de pareamento" ou "modo de configuração"
   específico que talvez precise ser ativado antes de ele anunciar por BLE.
 
+## App Android nativo (Capacitor) — iniciado
+
+Criado `android/` na raiz do repo via `npx cap add android` (Capacitor
+8.5.0). **Decisão importante**: não é uma reescrita nativa da UI (ao
+contrário do app irmão Rastro Trato Certo, que é Kotlin/Compose puro) — é
+um WebView que carrega `https://rebanho-app-omega.vercel.app`
+(`capacitor.config.json` → `server.url`), preservando 100% das telas e da
+lógica já existentes. `webDir` aponta pra `public` só porque o Capacitor
+exige algum valor; como o server é remoto, esse diretório não é
+efetivamente usado (o app não roda offline hoje — se isso vier a importar,
+seria um projeto à parte de cache/service worker dentro do WebView).
+
+- **Plugin nativo**: `RebanhoHardwarePlugin.kt`
+  (`android/app/src/main/java/br/com/rastro/rebanho/`), registrado em
+  `MainActivity.java` via `registerPlugin(...)`. Métodos
+  `buscarBalanca()`/`buscarBastao()`/`conectar({tipo, endereco})`/
+  `desconectar()`; eventos `bluetoothStatus`, `bluetoothFrame` (payload
+  em base64) e `bluetoothDevices`.
+- **Núcleo Bluetooth**: `BluetoothHardwareManager.kt`, cópia adaptada de
+  `ScaleConnectionManager.kt` do app irmão **Rastro Trato Certo**
+  (`~/Documents/App Balanca Trato Vagao/android-native/`), que já passou
+  pela mesma lição em produção: Bluetooth Classic SPP puro pra balanças
+  falhava (`read failed, socket might closed or timeout`); busca BLE
+  direta no app (sem exigir pareamento prévio pelo Android) é o que
+  funciona de verdade. Essa classe já tinha um `TipoEquipamento.BASTAO`
+  parametrizado especificamente pra leitor RFID (nunca usado lá) — foi
+  isso que tornou o reaproveitamento direto. Fallback `connectClassic()`
+  (RFCOMM/SPP) existe pro RS420, mas o formato real do frame dele ainda
+  não foi validado com o hardware físico.
+- **Ponte JS**: `lib/capacitorNativo.js` (`nativoDisponivel()`,
+  `rebanhoHardware()`) e `lib/bluetoothDiagnosticoNativo.js` (mesma forma
+  externa de `lib/bluetoothDiagnostico.js`, mas via plugin nativo).
+  `components/TesteEquipamentos.jsx` escolhe automaticamente qual usar
+  (`nativoDisponivel()`), incluindo lista de aparelhos encontrados
+  (a busca nativa não abre um seletor do sistema como o Web Bluetooth) e o
+  último frame bruto recebido em hex, pra ajudar a descobrir o formato do
+  RS420. **`lib/rfid.js` e `lib/bluetoothScale.js` (usados na produção,
+  Pesagens/Cadastro) ainda NÃO foram ligados ao plugin nativo de
+  propósito** — só depois de confirmar que a busca nativa realmente
+  funciona com o S3/RS420 físicos é que vale integrar na tela real, pra
+  não arriscar quebrar um fluxo que já funciona.
+- **Toolchain de build confirmado neste ambiente**: Android Studio já
+  vem com JBR (Java 21) e o SDK já está em `~/Library/Android/sdk` —
+  `JAVA_HOME=/Applications/Android\ Studio.app/Contents/jbr/Contents/Home`
+  + `ANDROID_HOME=~/Library/Android/sdk` + `./gradlew assembleDebug`
+  (dentro de `android/`) compila normalmente. APK debug fica em
+  `android/app/build/outputs/apk/debug/app-debug.apk` — não commitado
+  (`.gitignore` já exclui `*.apk`), enviado direto pro usuário testar via
+  `SendUserFile`/sideload.
+- Pendências imediatas: confirmar que o app abre e loga igual ao Chrome
+  (fase 1); testar a busca nativa da balança S3 (fase 2); descobrir o
+  formato real do frame do RS420 com o hardware físico (fase 3, ver
+  `lib/bluetoothDiagnosticoNativo.js` mostrando hex bruto).
+
 ## RLS (permissões)
 
 Mesmo padrão dos outros dois apps: `auth.uid() = consultor_id` pro
