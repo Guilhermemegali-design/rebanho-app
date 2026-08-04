@@ -292,6 +292,21 @@ function FormPesagem({ dados, onSalvo, onCancelar, inicial }) {
         </div>
       )}
       {escala.erro && <div style={styles.errorBox}>{escala.erro}</div>}
+      {escala.conectando && escala.dispositivosEncontrados?.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={styles.hardwareHint}>Toque na balança para conectar:</div>
+          {escala.dispositivosEncontrados.map((item) => (
+            <button
+              key={item.endereco}
+              type="button"
+              onClick={() => escala.conectarEm(item.endereco, item.nome)}
+              style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }}
+            >
+              {item.nome}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ ...styles.card, marginTop: 14 }}>
         <InputField
