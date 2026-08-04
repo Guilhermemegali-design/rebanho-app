@@ -153,6 +153,37 @@ class BluetoothHardwareManager(
         }
     }
 
+    // O Allflex RS420 normalmente aparece como Bluetooth Classic SPP,
+    // não como BLE. Ele precisa estar pareado nas configurações do
+    // Android; depois incluímos os pareados na mesma lista mostrada pelo
+    // app, para o operador poder selecioná-lo normalmente.
+    @SuppressLint("MissingPermission")
+    fun includePairedClassicDevices() {
+        if (!canUseBluetooth()) return
+        pairedDevices().forEach { device ->
+            val name = deviceName(device)
+            bleDeviceMap[device.address] = device
+            bleNames[device.address] = "$name (pareado)"
+            bleSignals[device.address] = 0
+        }
+        publicarDispositivos()
+    }
+
+    private fun publicarDispositivos() {
+        _bleDevices.value = bleDeviceMap.keys.map { address ->
+            BleDispositivo(
+                name = bleNames[address] ?: "Bluetooth sem nome",
+                address = address,
+                signal = bleSignals[address] ?: -127,
+            )
+        }.sortedWith(
+            compareByDescending<BleDispositivo> {
+                val n = it.name.uppercase()
+                priorityNames.any { nome -> n.contains(nome) }
+            }.thenByDescending { it.signal },
+        )
+    }
+
     @SuppressLint("MissingPermission")
     fun stopBleScan() {
         if (canScanBluetooth()) runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
@@ -173,6 +204,16 @@ class BluetoothHardwareManager(
             device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         } else {
             device.connectGatt(context, false, gattCallback)
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun connectPreferred(address: String) {
+        val paired = pairedDevices().firstOrNull { it.address == address }
+        if (tipo == TipoEquipamento.BASTAO && paired != null) {
+            connectClassic(paired)
+        } else {
+            connectBle(address)
         }
     }
 

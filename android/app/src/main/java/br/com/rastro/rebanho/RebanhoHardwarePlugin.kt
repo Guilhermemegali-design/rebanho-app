@@ -16,6 +16,7 @@ package br.com.rastro.rebanho
 // ============================================================
 
 import android.Manifest
+import android.os.Build
 import android.util.Base64
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -37,9 +38,12 @@ import kotlinx.coroutines.launch
             strings = [
                 Manifest.permission.BLUETOOTH_SCAN,
                 Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.ACCESS_FINE_LOCATION,
             ],
-            alias = "bluetooth",
+            alias = "bluetoothModerno",
+        ),
+        Permission(
+            strings = [Manifest.permission.ACCESS_FINE_LOCATION],
+            alias = "bluetoothLegado",
         ),
     ],
 )
@@ -95,6 +99,9 @@ class RebanhoHardwarePlugin : Plugin() {
     private fun iniciarBusca(tipo: TipoEquipamento, call: PluginCall) {
         val manager = managerPara(tipo)
         manager.startBleScan()
+        if (tipo == TipoEquipamento.BASTAO) {
+            manager.includePairedClassicDevices()
+        }
         scope.launch {
             // Espelha a lista de dispositivos encontrados periodicamente
             // enquanto a busca (12s, definida no manager) estiver ativa.
@@ -106,10 +113,16 @@ class RebanhoHardwarePlugin : Plugin() {
         call.resolve()
     }
 
+    private fun aliasPermissaoBluetooth(): String =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) "bluetoothModerno" else "bluetoothLegado"
+
+    private fun bluetoothPermitido(): Boolean =
+        getPermissionState(aliasPermissaoBluetooth()) == com.getcapacitor.PermissionState.GRANTED
+
     @PluginMethod
     fun buscarBalanca(call: PluginCall) {
-        if (getPermissionState("bluetooth") != com.getcapacitor.PermissionState.GRANTED) {
-            requestPermissionForAlias("bluetooth", call, "onPermissaoBalanca")
+        if (!bluetoothPermitido()) {
+            requestPermissionForAlias(aliasPermissaoBluetooth(), call, "onPermissaoBalanca")
             return
         }
         iniciarBusca(TipoEquipamento.BALANCA, call)
@@ -117,7 +130,7 @@ class RebanhoHardwarePlugin : Plugin() {
 
     @PermissionCallback
     private fun onPermissaoBalanca(call: PluginCall) {
-        if (getPermissionState("bluetooth") == com.getcapacitor.PermissionState.GRANTED) {
+        if (bluetoothPermitido()) {
             iniciarBusca(TipoEquipamento.BALANCA, call)
         } else {
             call.reject("Permissão de Bluetooth negada.")
@@ -126,8 +139,8 @@ class RebanhoHardwarePlugin : Plugin() {
 
     @PluginMethod
     fun buscarBastao(call: PluginCall) {
-        if (getPermissionState("bluetooth") != com.getcapacitor.PermissionState.GRANTED) {
-            requestPermissionForAlias("bluetooth", call, "onPermissaoBastao")
+        if (!bluetoothPermitido()) {
+            requestPermissionForAlias(aliasPermissaoBluetooth(), call, "onPermissaoBastao")
             return
         }
         iniciarBusca(TipoEquipamento.BASTAO, call)
@@ -135,7 +148,7 @@ class RebanhoHardwarePlugin : Plugin() {
 
     @PermissionCallback
     private fun onPermissaoBastao(call: PluginCall) {
-        if (getPermissionState("bluetooth") == com.getcapacitor.PermissionState.GRANTED) {
+        if (bluetoothPermitido()) {
             iniciarBusca(TipoEquipamento.BASTAO, call)
         } else {
             call.reject("Permissão de Bluetooth negada.")
@@ -148,7 +161,7 @@ class RebanhoHardwarePlugin : Plugin() {
         val endereco = call.getString("endereco") ?: return call.reject("Informe o endereço do aparelho.")
         val tipo = runCatching { TipoEquipamento.valueOf(tipoStr) }.getOrNull()
             ?: return call.reject("Tipo inválido: $tipoStr")
-        managerPara(tipo).connectBle(endereco)
+        managerPara(tipo).connectPreferred(endereco)
         call.resolve()
     }
 
