@@ -375,6 +375,15 @@ seria um projeto à parte de cache/service worker dentro do WebView).
   formato ainda não foi confirmado pro modo "Online"/nativo (`bluetoothFrame`
   em `lib/capacitorNativo.js`), que continua sem uso real validado — pode
   ser diferente.
+- **`brinco_rfid` passou a gravar a EID ISO completa (15 dígitos), não só
+  os últimos 8 (2026-08-05).** Pedido explícito do usuário, pra bater com
+  o número mostrado no visor do bastão. Animais já cadastrados antes disso
+  continuam com só os últimos 8 dígitos salvos (não foram migrados — não
+  dá pra reconstruir os dígitos que já tinham sido descartados). Os dois
+  formatos convivem: `encontrarAnimalPorTag` (`lib/rfid.js`) usa
+  `normalizarTagParaComparacao` pra reduzir os dois lados aos últimos 8
+  dígitos antes de comparar, então uma leitura nova com a EID completa
+  ainda encontra um animal antigo cadastrado no formato curto.
 
 ## RLS (permissões)
 
