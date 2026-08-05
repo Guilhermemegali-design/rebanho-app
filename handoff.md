@@ -333,18 +333,18 @@ seria um projeto à parte de cache/service worker dentro do WebView).
   isso que tornou o reaproveitamento direto. Fallback `connectClassic()`
   (RFCOMM/SPP) existe pro RS420, mas o formato real do frame dele ainda
   não foi validado com o hardware físico.
-- **Conexão serial recusada pelo bastão real (2026-08-05, aguardando
-  confirmação de teste):** ao testar `connectClassic()` com o hardware
-  físico pela primeira vez, deu exatamente o mesmo erro já visto antes com
-  balanças — `"read failed, socket might closed or timeout, read ret: -1"`
-  — ao tentar `createRfcommSocketToServiceRecord(SPP_UUID)`. É o bug
-  clássico do Android com módulos Bluetooth Classic baratos sem registro
-  SDP correto (o app pareia normalmente, mas a busca SDP pelo canal falha
-  na conexão). Corrigido em `BluetoothHardwareManager.candidatosSocketClassico`
+- **Conexão serial recusada pelo bastão real (2026-08-05) — corrigido e
+  confirmado com o hardware físico.** Ao testar `connectClassic()` pela
+  primeira vez, deu exatamente o mesmo erro já visto antes com balanças —
+  `"read failed, socket might closed or timeout, read ret: -1"` — ao
+  tentar `createRfcommSocketToServiceRecord(SPP_UUID)`. É o bug clássico
+  do Android com módulos Bluetooth Classic baratos sem registro SDP
+  correto (o app pareia normalmente, mas a busca SDP pelo canal falha na
+  conexão). Corrigido em `BluetoothHardwareManager.candidatosSocketClassico`
   tentando o modo padrão primeiro e, se falhar, abrindo o canal RFCOMM
   direto pelo número (1 a 4, via reflection) — mesmo contorno documentado
-  pra esse tipo de problema. APK debug reenviado pro usuário testar; ainda
-  não confirmado se resolveu com o hardware físico.
+  pra esse tipo de problema. Usuário testou o APK debug reenviado e
+  confirmou que conectou.
 - **Ponte JS**: `lib/capacitorNativo.js` (`nativoDisponivel()`,
   `rebanhoHardware()`) e `lib/bluetoothDiagnosticoNativo.js` (mesma forma
   externa de `lib/bluetoothDiagnostico.js`, mas via plugin nativo).
