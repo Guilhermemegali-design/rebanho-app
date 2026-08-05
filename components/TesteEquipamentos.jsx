@@ -91,8 +91,8 @@ function BuscaBluetooth({ icone: Icone, rotulo, diag, avisoSemPeso, mostrarFrame
 
 export default function TesteEquipamentos() {
   const [leituras, setLeituras] = useState([]);
-  const { lendo } = useRfidScanner((tag) => {
-    setLeituras((atuais) => [{ tag, hora: HORA_FORMATTER.format(new Date()) }, ...atuais].slice(0, 10));
+  const { lendo } = useRfidScanner((tag, bruto) => {
+    setLeituras((atuais) => [{ tag, bruto, hora: HORA_FORMATTER.format(new Date()) }, ...atuais].slice(0, 10));
   });
 
   // As duas versões (web e nativa) são chamadas sempre — regra dos hooks —
@@ -146,15 +146,19 @@ export default function TesteEquipamentos() {
               <div
                 key={i}
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 13,
                   padding: "6px 0",
                   borderTop: i === 0 ? "none" : "1px solid #EFEDE7",
                 }}
               >
-                <span style={{ fontWeight: 700 }}>{item.tag}</span>
-                <span style={{ color: "#8A8A86" }}>{item.hora}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                  <span style={{ fontWeight: 700 }}>{item.tag}</span>
+                  <span style={{ color: "#8A8A86" }}>{item.hora}</span>
+                </div>
+                {item.bruto && item.bruto !== item.tag && (
+                  <div style={{ fontSize: 11, color: "#8A8A86", wordBreak: "break-all", marginTop: 2 }}>
+                    texto bruto recebido: "{item.bruto}"
+                  </div>
+                )}
               </div>
             ))}
           </div>
