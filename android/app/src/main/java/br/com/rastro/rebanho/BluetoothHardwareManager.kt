@@ -332,10 +332,18 @@ class BluetoothHardwareManager(
         activeName = deviceName(device)
         onStatus(false, "Conectando a $activeName pelo modo serial clássico (SPP)…")
         readJob = scope.launch(Dispatchers.IO) {
+            adapter?.cancelDiscovery()
+            var ultimoErro: Throwable? = null
+            val socket = candidatosSocketClassico(device).firstNotNullOfOrNull { criarSocket ->
+                runCatching { criarSocket().also { it.connect() } }
+                    .onFailure { ultimoErro = it }
+                    .getOrNull()
+            }
+            if (socket == null) {
+                onStatus(false, "A porta serial foi recusada por $activeName (${ultimoErro?.message ?: "sem detalhe"}).")
+                return@launch
+            }
             runCatching {
-                adapter?.cancelDiscovery()
-                val socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                socket.connect()
                 bluetoothSocket = socket
                 onStatus(true, "$activeName conectado pelo modo serial.")
                 readLoop(socket.inputStream)
@@ -343,6 +351,27 @@ class BluetoothHardwareManager(
                 onStatus(false, "A porta serial foi recusada por $activeName (${it.message ?: "sem detalhe"}).")
             }
         }
+    }
+
+    // Leitores/módulos seriais Bluetooth baratos (é o caso deste bastão)
+    // costumam não responder direito à busca SDP que
+    // createRfcommSocketToServiceRecord faz pra descobrir o canal —
+    // derruba a conexão de cara com "read failed, socket might closed or
+    // timeout" (mesmo erro clássico já visto antes com balanças Bluetooth
+    // Classic sem registro SDP correto). O contorno é abrir o canal
+    // RFCOMM direto pelo número, pulando a busca SDP inteira — a API
+    // pública não expõe isso, só via reflection (`createRfcommSocket`,
+    // método interno do BluetoothDevice). Tenta o modo padrão primeiro
+    // e, se falhar, os canais mais comuns usados por esses módulos.
+    private fun candidatosSocketClassico(device: BluetoothDevice): List<() -> BluetoothSocket> {
+        val porServico: () -> BluetoothSocket = { device.createRfcommSocketToServiceRecord(SPP_UUID) }
+        val porCanal: (Int) -> () -> BluetoothSocket = { canal ->
+            {
+                val metodo = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+                metodo.invoke(device, canal) as BluetoothSocket
+            }
+        }
+        return listOf(porServico) + (1..4).map(porCanal)
     }
 
     fun pairedDevices(): List<BluetoothDevice> {
