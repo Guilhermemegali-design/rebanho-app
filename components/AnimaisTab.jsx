@@ -4,9 +4,10 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL, calcularGmd, calcularValorPorArroba } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
+import { useBluetoothScale } from "@/lib/bluetoothScale";
 import { statusAnimal } from "@/lib/alerts";
 import { enviarDocumentoRebanho } from "@/lib/storage";
-import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, ArrowLeftRight, Syringe, Trash2, Pencil } from "lucide-react";
+import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, Bluetooth, BluetoothConnected, ArrowLeftRight, Syringe, Trash2, Pencil } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const SITUACOES = { ativo: "Ativo", vendido: "Vendido", morto: "Morto", transferido: "Transferido" };
@@ -350,6 +351,7 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
   const [categoria, setCategoria] = useState(inicial?.categoria || "");
   const [dataEntrada, setDataEntrada] = useState(inicial?.data_entrada || new Date().toISOString().slice(0, 10));
   const [pesoEntrada, setPesoEntrada] = useState(inicial?.peso_entrada ?? "");
+  const [pesoDaBalanca, setPesoDaBalanca] = useState(false);
   const [modoValor, setModoValor] = useState("total"); // total | arroba
   const [valorEntrada, setValorEntrada] = useState(inicial?.valor_entrada ?? "");
   const [precoArroba, setPrecoArroba] = useState("");
@@ -364,6 +366,14 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
 
   const aoLerTag = useCallback((tag) => setBrincoRfid(tag), []);
   const { lendo } = useRfidScanner(aoLerTag);
+
+  const escala = useBluetoothScale();
+  useEffect(() => {
+    if (escala.peso != null) {
+      setPesoEntrada(String(escala.peso));
+      setPesoDaBalanca(true);
+    }
+  }, [escala.peso]);
 
   function handleEscolherFornecedor(id) {
     if (id === "__novo__") {
@@ -513,7 +523,46 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
           </div>
         )}
         <InputField label="Data de entrada" type="date" value={dataEntrada} onChange={setDataEntrada} />
-        <InputField label="Peso de entrada (kg)" type="number" value={pesoEntrada} onChange={setPesoEntrada} placeholder="0" />
+
+        {escala.suportado ? (
+          <button
+            type="button"
+            onClick={escala.conectado ? escala.desconectar : escala.conectar}
+            disabled={escala.conectando}
+            style={{ ...styles.scaleBtn, ...(escala.conectado ? styles.scaleBtnConnected : {}), marginBottom: 12 }}
+          >
+            {escala.conectado ? <BluetoothConnected size={17} /> : <Bluetooth size={17} />}
+            {escala.conectando ? "Conectando..." : escala.conectado ? `Conectado: ${escala.dispositivo}` : "Conectar balança Bluetooth"}
+          </button>
+        ) : (
+          <div style={{ ...styles.hardwareHint, marginBottom: 12 }}>
+            Este aparelho/navegador não conecta com balança Bluetooth diretamente (comum no iPhone/iPad).
+            Digite o peso mostrado na balança abaixo.
+          </div>
+        )}
+        {escala.erro && <div style={{ ...styles.errorBox, marginBottom: 12 }}>{escala.erro}</div>}
+        {escala.conectando && escala.dispositivosEncontrados?.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={styles.hardwareHint}>Toque na balança para conectar:</div>
+            {escala.dispositivosEncontrados.map((item) => (
+              <button
+                key={item.endereco}
+                type="button"
+                onClick={() => escala.conectarEm(item.endereco, item.nome)}
+                style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }}
+              >
+                {item.nome}
+              </button>
+            ))}
+          </div>
+        )}
+        <InputField
+          label={`Peso de entrada (kg)${pesoDaBalanca ? " — lido da balança" : ""}`}
+          type="number"
+          value={pesoEntrada}
+          onChange={(v) => { setPesoEntrada(v); setPesoDaBalanca(false); }}
+          placeholder="0"
+        />
 
         <div style={styles.viewToggle}>
           <button onClick={() => setModoValor("total")} style={modoValor === "total" ? { ...styles.viewToggleBtn, ...styles.viewToggleBtnActive } : styles.viewToggleBtn}>Valor total</button>
