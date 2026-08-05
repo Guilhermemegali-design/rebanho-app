@@ -1,6 +1,6 @@
 # Rebanho — Handoff
 
-Última atualização: 2026-08-04
+Última atualização: 2026-08-05
 
 ## O que é
 
@@ -357,6 +357,24 @@ seria um projeto à parte de cache/service worker dentro do WebView).
   (fase 1); testar a busca nativa da balança S3 (fase 2); descobrir o
   formato real do frame do RS420 com o hardware físico (fase 3, ver
   `lib/bluetoothDiagnosticoNativo.js` mostrando hex bruto).
+- **Formato real do frame do bastão em modo teclado/HID (2026-08-05):
+  confirmado com captura real de texto bruto** (via o novo debug em
+  `components/TesteEquipamentos.jsx` que expõe o texto antes do parsing).
+  Tudo vem grudado num único bloco de dígitos, sem separador: cabeçalho de
+  tamanho variável + EID ISO de 15 dígitos (país + nacional) + data/hora de
+  12 dígitos (AAMMDDHHMMSS, relógio interno do leitor, descartado).
+  Exemplo real: `"1000000" + "999000000008651" + "201228235435"` — a EID
+  bate exatamente com o número mostrado no visor do bastão. `lib/rfid.js`
+  (`extrairTagRfid`) agora ancora a extração a partir do FINAL do bloco
+  (tamanho total menos os 12 dígitos de data/hora, pegando os 15 dígitos
+  anteriores a isso), então funciona não importa o tamanho do cabeçalho.
+  Duas tentativas anteriores no mesmo dia erraram esse formato (uma
+  ancorando do início do bloco, outra com deslocamento fixo pensado pra
+  sufixo de 8 dígitos) — se aparecer leitura errada de novo, comparar
+  contra esse formato confirmado antes de mudar a lógica de novo. Esse
+  formato ainda não foi confirmado pro modo "Online"/nativo (`bluetoothFrame`
+  em `lib/capacitorNativo.js`), que continua sem uso real validado — pode
+  ser diferente.
 
 ## RLS (permissões)
 
