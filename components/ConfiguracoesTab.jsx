@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, MapPinned, Save, ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import { Copy, Link2, MapPinned, Save, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { PageHeader, SelectField } from "@/components/UI";
 import ImportExportTab from "@/components/ImportExportTab";
 import TesteEquipamentos from "@/components/TesteEquipamentos";
@@ -13,6 +13,8 @@ const PAPEIS = [
   { value: "editor", label: "Operador" },
   { value: "leitor", label: "Somente leitura" },
 ];
+
+const LINK_ACESSO_CLIENTE = "https://rebanho-app-omega.vercel.app/";
 
 const rotuloPapel = (papel) => PAPEIS.find((item) => item.value === papel)?.label || "Operador";
 
@@ -36,6 +38,7 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, fazend
   const [nomeFazenda, setNomeFazenda] = useState(fazenda?.nome || "");
   const [salvandoFazenda, setSalvandoFazenda] = useState(false);
   const [mensagemFazenda, setMensagemFazenda] = useState("");
+  const [mensagemLink, setMensagemLink] = useState("");
 
   useEffect(() => {
     setNomeFazenda(fazenda?.nome || "");
@@ -127,6 +130,15 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, fazend
     }
   }
 
+  async function copiarLinkCliente() {
+    try {
+      await navigator.clipboard.writeText(LINK_ACESSO_CLIENTE);
+      setMensagemLink("Link copiado. Agora é só enviar ao cliente.");
+    } catch {
+      setMensagemLink("Não foi possível copiar automaticamente. Selecione o link acima e copie.");
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Configurações" subtitle="Usuários, níveis de acesso e cópia de segurança." />
@@ -162,6 +174,31 @@ export default function ConfiguracoesTab({ dados, clienteId, consultorId, fazend
             {mensagemFazenda && <div style={styles.errorBox}>{mensagemFazenda}</div>}
           </form>
         )}
+      </div>
+
+      <div style={{ ...styles.card, padding: 18, marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 6 }}>
+          <Link2 size={19} color="#1F4D45" />
+          <strong>Link de acesso do cliente</strong>
+        </div>
+        <div style={{ fontSize: 13, color: "#6F6F6B", lineHeight: 1.5, marginBottom: 10 }}>
+          Envie este endereço ao cliente. No primeiro acesso, ele cria a conta usando o código gerado em Usuários e acessos.
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "stretch", flexWrap: "wrap" }}>
+          <input
+            type="text"
+            readOnly
+            value={LINK_ACESSO_CLIENTE}
+            onFocus={(e) => e.target.select()}
+            aria-label="Link de acesso do cliente"
+            style={{ ...styles.input, flex: "1 1 280px", minWidth: 0 }}
+          />
+          <button type="button" onClick={copiarLinkCliente} style={styles.primaryBtn}>
+            <Copy size={16} style={{ verticalAlign: "middle", marginRight: 7 }} />
+            Copiar link
+          </button>
+        </div>
+        {mensagemLink && <div style={{ ...styles.emptyHint, marginTop: 10 }}>{mensagemLink}</div>}
       </div>
 
       <TesteEquipamentos />
