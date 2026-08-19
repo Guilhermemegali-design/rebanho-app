@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { kml } from "@tmcw/togeojson";
 import { strFromU8, unzipSync } from "fflate";
-import { FileUp, LocateFixed, Map as MapIcon, Move, Search } from "lucide-react";
+import { FileUp, LocateFixed, Map as MapIcon, MapPin, Move, Search } from "lucide-react";
 import { styles } from "@/lib/styles";
+import { InputField, SelectField, PrimaryButton } from "@/components/UI";
+
+const TIPOS_LOCAL = { pasto: "Pasto", curral: "Curral", baia: "Baia", outro: "Outro" };
 
 function normalizar(texto) {
   return String(texto || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
@@ -51,6 +54,11 @@ export default function MapaFazenda({ dados }) {
   const [processando, setProcessando] = useState(false);
   const [loteSelecionadoId, setLoteSelecionadoId] = useState(null);
   const [mapaPronto, setMapaPronto] = useState(false);
+  const [criandoLocal, setCriandoLocal] = useState(false);
+  const [nomeNovoLocal, setNomeNovoLocal] = useState("");
+  const [tipoNovoLocal, setTipoNovoLocal] = useState("pasto");
+  const [erroNovoLocal, setErroNovoLocal] = useState("");
+  const [salvandoLocal, setSalvandoLocal] = useState(false);
 
   useEffect(() => {
     let ativo = true;
@@ -224,6 +232,23 @@ export default function MapaFazenda({ dados }) {
     }
   }
 
+  async function salvarNovoLocal() {
+    if (!nomeNovoLocal.trim()) { setErroNovoLocal("Informe o nome do local."); return; }
+    setErroNovoLocal("");
+    setSalvandoLocal(true);
+    try {
+      await dados.criarLocal({ nome: nomeNovoLocal.trim(), tipo: tipoNovoLocal, capacidade: null });
+      setMensagem(`Local "${nomeNovoLocal.trim()}" criado. Já pode ser vinculado a lotes; pra aparecer desenhado no mapa, inclua a área correspondente num KML/KMZ.`);
+      setNomeNovoLocal("");
+      setTipoNovoLocal("pasto");
+      setCriandoLocal(false);
+    } catch (err) {
+      setErroNovoLocal(err.message || "Não foi possível criar o local.");
+    } finally {
+      setSalvandoLocal(false);
+    }
+  }
+
   function usarGps() {
     navigator.geolocation?.getCurrentPosition(
       (posicao) => mapaRef.current?.setView([posicao.coords.latitude, posicao.coords.longitude], 16),
@@ -236,7 +261,7 @@ export default function MapaFazenda({ dados }) {
     <div>
       <div style={{ ...styles.offlineNotice, background: "#E4EFE9", color: "#1F4D45" }}>
         <MapIcon size={17} />
-        <div><strong>Mapa geográfico da fazenda</strong><br />Importe o KML/KMZ para desenhar os pastos. As áreas permanecem visíveis offline.</div>
+        <div><strong>Mapa geográfico da fazenda</strong><br />Importe o KML/KMZ para desenhar os pastos, ou toque em "Novo local" pra cadastrar um local sem desenhar área. As áreas importadas permanecem visíveis offline.</div>
       </div>
       <div style={{ ...styles.tableFiltersRow, padding: 0, border: 0, marginBottom: 10 }}>
         <div style={styles.tableSearchBox}>
@@ -249,7 +274,24 @@ export default function MapaFazenda({ dados }) {
           <FileUp size={15} /> {processando ? "Processando..." : "Importar KML/KMZ"}
           <input type="file" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" onChange={importarArquivo} disabled={processando} hidden />
         </label>
+        <button type="button" onClick={() => setCriandoLocal((atual) => !atual)} style={{ ...styles.editLinkBtn, display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <MapPin size={15} /> Novo local
+        </button>
       </div>
+      {criandoLocal && (
+        <div style={{ ...styles.card, marginBottom: 10 }}>
+          <InputField label="Nome do local" value={nomeNovoLocal} onChange={setNomeNovoLocal} placeholder="Ex: Piquete 3" />
+          <SelectField label="Tipo" value={tipoNovoLocal} onChange={setTipoNovoLocal} options={Object.entries(TIPOS_LOCAL).map(([value, label]) => ({ value, label }))} />
+          <div style={{ ...styles.tableCellSub, marginBottom: 8 }}>
+            Isso cadastra o local (pra usar em lotes e animais) sem depender de importar KML — a área desenhada no mapa continua vindo só do KML/KMZ.
+          </div>
+          {erroNovoLocal && <div style={styles.errorBox}>{erroNovoLocal}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <PrimaryButton onClick={salvarNovoLocal} disabled={salvandoLocal}>{salvandoLocal ? "Salvando..." : "Salvar local"}</PrimaryButton>
+            <button type="button" onClick={() => { setCriandoLocal(false); setErroNovoLocal(""); }} style={styles.linkBtn}>Cancelar</button>
+          </div>
+        </div>
+      )}
       {resultados.length > 0 && (
         <div style={{ ...styles.card, padding: 8, marginBottom: 10 }}>
           {resultados.map((resultado) => (

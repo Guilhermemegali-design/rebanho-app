@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Radio, ArrowLeftRight, Trash2, Pencil } from "lucide-react";
+import { Radio, ArrowLeftRight, Trash2, Pencil, Search } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = {
@@ -104,6 +104,7 @@ export default function MovimentacoesTab({ dados }) {
 function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const [animalId, setAnimalId] = useState(inicial?.animal_id || "");
   const [animaisSelecionados, setAnimaisSelecionados] = useState([]);
+  const [buscaDigitada, setBuscaDigitada] = useState("");
   const [pesosSaida, setPesosSaida] = useState({});
   const [tipo, setTipo] = useState(inicial?.tipo || "transferencia_lote");
   const [loteDestinoId, setLoteDestinoId] = useState(inicial?.lote_destino_id || "");
@@ -132,6 +133,30 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const { lendo } = useRfidScanner(aoLerTag);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
+
+  function adicionarAnimal(animal) {
+    setAnimaisSelecionados((atuais) => (atuais.includes(animal.id) ? atuais : [...atuais, animal.id]));
+    setBuscaDigitada("");
+    setErro("");
+  }
+
+  function handleBuscaDigitada(valor) {
+    setBuscaDigitada(valor);
+    const animal = encontrarAnimalPorTag(dados.animais, valor.trim());
+    if (animal) adicionarAnimal(animal);
+  }
+
+  const resultadosBusca = useMemo(() => {
+    const termo = buscaDigitada.trim().toLowerCase();
+    if (!termo) return [];
+    return dados.animais
+      .filter((animal) => (
+        animal.situacao === "ativo" &&
+        !animaisSelecionados.includes(animal.id) &&
+        (animal.brinco_atual.toLowerCase().includes(termo) || (animal.brinco_rfid || "").toLowerCase().includes(termo))
+      ))
+      .slice(0, 8);
+  }, [buscaDigitada, dados.animais, animaisSelecionados]);
 
   async function handleSalvar() {
     const idsSelecionados = inicial ? [animalId].filter(Boolean) : animaisSelecionados;
@@ -209,22 +234,39 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
           <>
             <SectionTitle>Animais</SectionTitle>
             <div style={styles.hardwareHint}>
-              O jeito mais rápido é apontar o bastão RFID pra cada animal — vai adicionando na lista abaixo. Também dá pra adicionar manualmente.
+              O jeito mais rápido é apontar o bastão RFID pra cada animal — vai adicionando na lista abaixo. Sem o bastão à mão, dá pra digitar o brinco aqui também.
             </div>
-            <SelectField
-              label="Adicionar animal manualmente"
-              value=""
-              onChange={(id) => {
-                if (!id) return;
-                setAnimaisSelecionados((atuais) => (atuais.includes(id) ? atuais : [...atuais, id]));
-              }}
-              options={[
-                { value: "", label: "Buscar por brinco..." },
-                ...dados.animais
-                  .filter((a) => a.situacao === "ativo" && !animaisSelecionados.includes(a.id))
-                  .map((a) => ({ value: a.id, label: a.brinco_atual })),
-              ]}
-            />
+            <div style={{ ...styles.field, position: "relative" }}>
+              <div style={styles.fieldLabel}>Digitar o brinco</div>
+              <div style={{ ...styles.tableSearchBox, border: "1px solid #E8E6DF" }}>
+                <Search size={16} color="#6F7772" />
+                <input
+                  value={buscaDigitada}
+                  onChange={(event) => handleBuscaDigitada(event.target.value)}
+                  placeholder="Brinco visual ou RFID"
+                  autoComplete="off"
+                  style={{ ...styles.input, border: 0, padding: 0, background: "transparent" }}
+                />
+              </div>
+              {resultadosBusca.length > 0 && (
+                <div style={{ position: "absolute", zIndex: 20, top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #E1DED5", borderRadius: 10, boxShadow: "0 10px 24px rgba(27, 45, 39, 0.12)", overflow: "hidden" }}>
+                  {resultadosBusca.map((animal) => (
+                    <button
+                      key={animal.id}
+                      type="button"
+                      onClick={() => adicionarAnimal(animal)}
+                      style={{ width: "100%", padding: "11px 13px", border: 0, borderBottom: "1px solid #F1EFE8", background: "#fff", textAlign: "left", cursor: "pointer" }}
+                    >
+                      <div style={styles.tableCellTitle}>{animal.brinco_atual}</div>
+                      <div style={styles.tableCellSub}>{animal.brinco_rfid ? `RFID ${animal.brinco_rfid}` : "Sem RFID"}{animal.raca ? ` · ${animal.raca}` : ""}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {buscaDigitada && resultadosBusca.length === 0 && (
+                <div style={{ ...styles.tableCellSub, marginTop: 6 }}>Nenhum animal encontrado.</div>
+              )}
+            </div>
             {animaisSelecionados.length === 0 ? (
               <EmptyHint text="Nenhum animal selecionado ainda." />
             ) : (
