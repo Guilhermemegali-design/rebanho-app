@@ -107,6 +107,8 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const [pesosSaida, setPesosSaida] = useState({});
   const [tipo, setTipo] = useState(inicial?.tipo || "transferencia_lote");
   const [loteDestinoId, setLoteDestinoId] = useState(inicial?.lote_destino_id || "");
+  const [novoLote, setNovoLote] = useState(false);
+  const [nomeNovoLote, setNomeNovoLote] = useState("");
   const [localDestinoId, setLocalDestinoId] = useState(inicial?.local_destino_id || "");
   const [data, setData] = useState(inicial?.data || new Date().toISOString().slice(0, 10));
   const [observacoes, setObservacoes] = useState(inicial?.observacoes || "");
@@ -138,14 +140,21 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
       const semPeso = idsSelecionados.find((id) => !pesosSaida[id] || Number(pesosSaida[id]) <= 0);
       if (semPeso) { setErro("Informe o peso de saída de todos os animais selecionados."); return; }
     }
+    if (novoLote && !nomeNovoLote.trim()) { setErro("Informe o nome do novo lote."); return; }
     setErro("");
     setSalvando(true);
     try {
+      let loteDestinoIdFinal = loteDestinoId;
+      if (novoLote) {
+        const criado = await dados.criarLote({ nome: nomeNovoLote.trim(), situacao: "ativo" });
+        loteDestinoIdFinal = criado.id;
+      }
+
       const registros = idsSelecionados.map((id) => {
         const animal = dados.animais.find((a) => a.id === id);
         const payload = { tipo, data, observacoes: observacoes || null };
         if (tipo === "transferencia_lote" || tipo === "entrada") {
-          payload.lote_destino_id = loteDestinoId || null;
+          payload.lote_destino_id = loteDestinoIdFinal || null;
           payload.lote_origem_id = animal?.lote_atual_id || null;
         }
         if (tipo === "transferencia_local" || tipo === "entrada") {
@@ -235,12 +244,32 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
         )}
 
         {(tipo === "transferencia_lote" || tipo === "entrada") && (
-          <SelectField
-            label="Lote de destino"
-            value={loteDestinoId}
-            onChange={setLoteDestinoId}
-            options={[{ value: "", label: "Sem lote" }, ...dados.lotes.map((l) => ({ value: l.id, label: l.nome }))]}
-          />
+          !novoLote ? (
+            <SelectField
+              label="Lote de destino"
+              value={loteDestinoId}
+              onChange={(id) => {
+                if (id === "__novo__") {
+                  setNovoLote(true);
+                  setLoteDestinoId("");
+                } else {
+                  setLoteDestinoId(id);
+                }
+              }}
+              options={[
+                { value: "", label: "Sem lote" },
+                ...dados.lotes.map((l) => ({ value: l.id, label: l.nome })),
+                { value: "__novo__", label: "+ Criar novo lote" },
+              ]}
+            />
+          ) : (
+            <div>
+              <InputField label="Nome do novo lote" value={nomeNovoLote} onChange={setNomeNovoLote} placeholder="Ex: Recria Águas 04" />
+              <button type="button" onClick={() => { setNovoLote(false); setNomeNovoLote(""); }} style={{ ...styles.linkBtn, textAlign: "left" }}>
+                Usar um lote já cadastrado
+              </button>
+            </div>
+          )
         )}
         {(tipo === "transferencia_local" || tipo === "entrada") && (
           <SelectField
