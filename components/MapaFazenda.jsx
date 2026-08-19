@@ -249,6 +249,11 @@ export default function MapaFazenda({ dados }) {
     }
   }
 
+  const locaisComArea = new Set(
+    (dados.mapaFazenda?.geojson?.features || []).map((f) => f.properties?.local_id).filter(Boolean)
+  );
+  const locaisSemArea = dados.locais.filter((local) => !locaisComArea.has(local.id));
+
   function usarGps() {
     navigator.geolocation?.getCurrentPosition(
       (posicao) => mapaRef.current?.setView([posicao.coords.latitude, posicao.coords.longitude], 16),
@@ -305,6 +310,24 @@ export default function MapaFazenda({ dados }) {
         </div>
       )}
       {mensagem && <div style={styles.errorBox}>{mensagem}</div>}
+      {loteSelecionadoId && locaisSemArea.length > 0 && (
+        <div style={{ ...styles.card, marginBottom: 10 }}>
+          <div style={{ ...styles.tableCellSub, marginBottom: 8 }}>
+            Mover <strong>{dados.lotes.find((l) => l.id === loteSelecionadoId)?.nome}</strong> pra um local sem área desenhada:
+          </div>
+          {locaisSemArea.map((local) => (
+            <button
+              key={local.id}
+              type="button"
+              onClick={() => transferirLote(loteSelecionadoId, local.id)}
+              style={{ ...styles.listItem, marginBottom: 5, width: "100%", textAlign: "left" }}
+            >
+              <MapPin size={15} />
+              <div style={{ flex: 1, fontSize: 12.5 }}>{local.nome}</div>
+            </button>
+          ))}
+        </div>
+      )}
       <div ref={elementoRef} style={{ height: "min(68vh, 650px)", minHeight: 430, borderRadius: 16, overflow: "hidden", border: "1px solid #D8D6CD", background: "#E7E4DC" }} />
       <div style={styles.hardwareHint}>
         <Move size={12} style={{ verticalAlign: "middle" }} /> Toque num lote e depois no pasto, ou arraste no computador. Os quadrantes já visualizados ficam no cache do aparelho.
