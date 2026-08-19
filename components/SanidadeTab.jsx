@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Radio, Syringe, Trash2, Pencil } from "lucide-react";
+import { Plus, Radio, Syringe, Trash2, Pencil } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = { vacina: "Vacinação", vermifugo: "Vermifugação", diagnostico: "Diagnóstico", tratamento: "Tratamento" };
@@ -114,15 +114,27 @@ function FormProcedimento({ dados, onSalvo, onCancelar, inicial }) {
   const [alcance, setAlcance] = useState(inicial?.grupo_lancamento ? "lote" : "animal");
   const [animalId, setAnimalId] = useState(inicial?.animal_id || "");
   const [loteId, setLoteId] = useState(inicial?.lote_lancamento_id || "");
-  const [tipo, setTipo] = useState(inicial?.tipo || "vacina");
-  const [medicamentoId, setMedicamentoId] = useState(inicial?.medicamento_id || "");
-  const [dose, setDose] = useState(inicial?.dose || "");
+  const criarItemVazio = () => ({
+    idLocal: crypto.randomUUID(),
+    tipo: "vacina",
+    medicamentoId: "",
+    dose: "",
+    carenciaDias: "0",
+    novoMedicamento: false,
+    nomeNovoMedicamento: "",
+  });
+  const [itens, setItens] = useState(() => inicial ? [{
+    idLocal: crypto.randomUUID(),
+    tipo: inicial.tipo || "vacina",
+    medicamentoId: inicial.medicamento_id || "",
+    dose: inicial.dose || "",
+    carenciaDias: String(inicial.carencia_dias ?? 0),
+    novoMedicamento: false,
+    nomeNovoMedicamento: "",
+  }] : [criarItemVazio()]);
   const [dataAplicacao, setDataAplicacao] = useState(inicial?.data_aplicacao || new Date().toISOString().slice(0, 10));
   const [proximaAplicacao, setProximaAplicacao] = useState(inicial?.proxima_aplicacao || "");
-  const [carenciaDias, setCarenciaDias] = useState(String(inicial?.carencia_dias ?? 0));
   const [observacoes, setObservacoes] = useState(inicial?.observacoes || "");
-  const [novoMedicamento, setNovoMedicamento] = useState(false);
-  const [nomeNovoMedicamento, setNomeNovoMedicamento] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
 
@@ -136,15 +148,27 @@ function FormProcedimento({ dados, onSalvo, onCancelar, inicial }) {
   );
   const { lendo } = useRfidScanner(aoLerTag, { ativo: alcance === "animal" });
 
-  function handleEscolherMedicamento(id) {
+  function atualizarItem(idLocal, mudancas) {
+    setItens((atuais) => atuais.map((item) => item.idLocal === idLocal ? { ...item, ...mudancas } : item));
+  }
+
+  function handleEscolherMedicamento(idLocal, id) {
     if (id === "__novo__") {
-      setNovoMedicamento(true);
-      setMedicamentoId("");
+      atualizarItem(idLocal, { novoMedicamento: true, medicamentoId: "", nomeNovoMedicamento: "" });
       return;
     }
-    setMedicamentoId(id);
+    const mudancas = { medicamentoId: id, novoMedicamento: false, nomeNovoMedicamento: "" };
     const med = dados.medicamentos.find((m) => m.id === id);
-    if (med?.carencia_padrao_dias != null) setCarenciaDias(String(med.carencia_padrao_dias));
+    if (med?.carencia_padrao_dias != null) mudancas.carenciaDias = String(med.carencia_padrao_dias);
+    atualizarItem(idLocal, mudancas);
+  }
+
+  function adicionarItem() {
+    setItens((atuais) => [...atuais, criarItemVazio()]);
+  }
+
+  function removerItem(idLocal) {
+    setItens((atuais) => atuais.length === 1 ? atuais : atuais.filter((item) => item.idLocal !== idLocal));
   }
 
   async function handleSalvar() {
@@ -152,31 +176,46 @@ function FormProcedimento({ dados, onSalvo, onCancelar, inicial }) {
     const animaisDoLote = dados.animais.filter((animal) => animal.lote_atual_id === loteId && animal.situacao === "ativo");
     if (!inicial && alcance === "lote" && !loteId) { setErro("Escolha o lote."); return; }
     if (!inicial && alcance === "lote" && animaisDoLote.length === 0) { setErro("Este lote não possui animais ativos."); return; }
+    if (itens.some((item) => item.novoMedicamento && !item.nomeNovoMedicamento.trim())) {
+      setErro("Informe o nome de cada novo medicamento ou vermífugo.");
+      return;
+    }
     setErro("");
     setSalvando(true);
     try {
-      let medId = medicamentoId;
-      if (novoMedicamento && nomeNovoMedicamento.trim()) {
-        const criado = await dados.criarMedicamento({ nome: nomeNovoMedicamento.trim(), tipo, carencia_padrao_dias: Number(carenciaDias) || 0 });
-        medId = criado.id;
+      const procedimentos = [];
+      for (const item of itens) {
+        let medId = item.medicamentoId;
+        if (item.novoMedicamento) {
+          const criado = await dados.criarMedicamento({
+            nome: item.nomeNovoMedicamento.trim(),
+            tipo: item.tipo,
+            carencia_padrao_dias: Number(item.carenciaDias) || 0,
+          });
+          medId = criado.id;
+        }
+        procedimentos.push({
+          tipo: item.tipo,
+          medicamento_id: medId || null,
+          dose: item.dose || null,
+          data_aplicacao: dataAplicacao,
+          proxima_aplicacao: proximaAplicacao || null,
+          carencia_dias: Number(item.carenciaDias) || 0,
+          observacoes: observacoes || null,
+        });
       }
-      const procedimento = {
-        tipo,
-        medicamento_id: medId || null,
-        dose: dose || null,
-        data_aplicacao: dataAplicacao,
-        proxima_aplicacao: proximaAplicacao || null,
-        carencia_dias: Number(carenciaDias) || 0,
-        observacoes: observacoes || null,
-      };
       if (inicial?.grupo_lancamento) {
-        await dados.atualizarProcedimentosEmGrupo(inicial.grupo_lancamento, procedimento);
+        await dados.atualizarProcedimentosEmGrupo(inicial.grupo_lancamento, procedimentos[0]);
       } else if (inicial) {
-        await dados.atualizarProcedimento(inicial, procedimento);
-      } else if (alcance === "lote") {
-        await dados.registrarProcedimentosEmLote(animaisDoLote.map((animal) => animal.id), procedimento, loteId);
+        await dados.atualizarProcedimento(inicial, procedimentos[0]);
       } else {
-        await dados.registrarProcedimento(animalId, procedimento);
+        for (const procedimento of procedimentos) {
+          if (alcance === "lote") {
+            await dados.registrarProcedimentosEmLote(animaisDoLote.map((animal) => animal.id), procedimento, loteId);
+          } else {
+            await dados.registrarProcedimento(animalId, procedimento);
+          }
+        }
       }
       onSalvo();
     } catch (err) {
@@ -227,27 +266,60 @@ function FormProcedimento({ dados, onSalvo, onCancelar, inicial }) {
             )}
           </>
         )}
-        <SelectField label="Tipo" value={tipo} onChange={setTipo} options={Object.entries(TIPOS).map(([value, label]) => ({ value, label }))} />
-
-        {!novoMedicamento ? (
-          <SelectField
-            label="Medicamento"
-            value={medicamentoId}
-            onChange={handleEscolherMedicamento}
-            options={[
-              { value: "", label: "Sem medicamento" },
-              ...dados.medicamentos.map((m) => ({ value: m.id, label: m.nome })),
-              { value: "__novo__", label: "+ Cadastrar novo medicamento" },
-            ]}
-          />
-        ) : (
-          <InputField label="Nome do novo medicamento" value={nomeNovoMedicamento} onChange={setNomeNovoMedicamento} placeholder="Ex: Ivermectina" />
+        <SectionTitle>{inicial ? "Produto aplicado" : "Medicamentos e vermífugos"}</SectionTitle>
+        {itens.map((item, indice) => (
+          <div key={item.idLocal} style={{ ...styles.rowCard, display: "block", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+              <strong>Item {indice + 1}</strong>
+              {!inicial && itens.length > 1 && (
+                <button type="button" onClick={() => removerItem(item.idLocal)} style={styles.iconDangerBtn} title="Remover item">
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </div>
+            <SelectField
+              label="Tipo"
+              value={item.tipo}
+              onChange={(valor) => atualizarItem(item.idLocal, { tipo: valor })}
+              options={Object.entries(TIPOS).map(([value, label]) => ({ value, label }))}
+            />
+            {!item.novoMedicamento ? (
+              <SelectField
+                label="Medicamento ou vermífugo"
+                value={item.medicamentoId}
+                onChange={(valor) => handleEscolherMedicamento(item.idLocal, valor)}
+                options={[
+                  { value: "", label: "Sem produto" },
+                  ...dados.medicamentos.map((m) => ({ value: m.id, label: m.nome })),
+                  { value: "__novo__", label: "+ Cadastrar novo produto" },
+                ]}
+              />
+            ) : (
+              <>
+                <InputField
+                  label="Nome do novo medicamento ou vermífugo"
+                  value={item.nomeNovoMedicamento}
+                  onChange={(valor) => atualizarItem(item.idLocal, { nomeNovoMedicamento: valor })}
+                  placeholder="Ex: Ivermectina"
+                />
+                <button type="button" onClick={() => atualizarItem(item.idLocal, { novoMedicamento: false, nomeNovoMedicamento: "" })} style={styles.secondaryBtn}>
+                  Escolher produto cadastrado
+                </button>
+              </>
+            )}
+            <InputField label="Dose" value={item.dose} onChange={(valor) => atualizarItem(item.idLocal, { dose: valor })} placeholder="Ex: 10 ml" />
+            <InputField label="Carência (dias)" type="number" value={item.carenciaDias} onChange={(valor) => atualizarItem(item.idLocal, { carenciaDias: valor })} placeholder="0" />
+          </div>
+        ))}
+        {!inicial && (
+          <button type="button" onClick={adicionarItem} style={{ ...styles.secondaryBtn, marginBottom: 14 }}>
+            <Plus size={16} style={{ verticalAlign: "middle", marginRight: 7 }} />
+            Adicionar outro medicamento ou vermífugo
+          </button>
         )}
 
-        <InputField label="Dose" value={dose} onChange={setDose} placeholder="Ex: 10ml" />
         <InputField label="Data de aplicação" type="date" value={dataAplicacao} onChange={setDataAplicacao} />
         <InputField label="Próxima aplicação (opcional)" type="date" value={proximaAplicacao} onChange={setProximaAplicacao} />
-        <InputField label="Carência (dias)" type="number" value={carenciaDias} onChange={setCarenciaDias} placeholder="0" />
         <TextAreaField label="Observações" value={observacoes} onChange={setObservacoes} placeholder="Opcional" />
       </div>
 
