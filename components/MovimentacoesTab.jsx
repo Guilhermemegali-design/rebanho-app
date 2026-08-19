@@ -103,7 +103,7 @@ export default function MovimentacoesTab({ dados }) {
 
 function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const [animalId, setAnimalId] = useState(inicial?.animal_id || "");
-  const [animaisVenda, setAnimaisVenda] = useState([]);
+  const [animaisSelecionados, setAnimaisSelecionados] = useState([]);
   const [pesosSaida, setPesosSaida] = useState({});
   const [tipo, setTipo] = useState(inicial?.tipo || "transferencia_lote");
   const [loteDestinoId, setLoteDestinoId] = useState(inicial?.lote_destino_id || "");
@@ -120,20 +120,22 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const aoLerTag = useCallback(
     (tag) => {
       const animal = encontrarAnimalPorTag(dados.animais, tag);
-      if (animal && tipo === "venda") {
-        setAnimaisVenda((atuais) => (atuais.includes(animal.id) ? atuais : [...atuais, animal.id]));
-      } else if (animal) setAnimalId(animal.id);
-      else setErro(`Nenhum animal encontrado com o brinco "${tag}".`);
+      if (!animal) { setErro(`Nenhum animal encontrado com o brinco "${tag}".`); return; }
+      if (inicial) {
+        setAnimalId(animal.id);
+      } else {
+        setAnimaisSelecionados((atuais) => (atuais.includes(animal.id) ? atuais : [...atuais, animal.id]));
+      }
     },
-    [dados.animais, tipo]
+    [dados.animais, inicial]
   );
   const { lendo } = useRfidScanner(aoLerTag);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
 
   async function handleSalvar() {
-    const idsSelecionados = tipo === "venda" ? animaisVenda : [animalId].filter(Boolean);
-    if (idsSelecionados.length === 0) { setErro(tipo === "venda" ? "Selecione ao menos um animal para a venda." : "Escolha o animal (ou aponte o bastão RFID)."); return; }
+    const idsSelecionados = inicial ? [animalId].filter(Boolean) : animaisSelecionados;
+    if (idsSelecionados.length === 0) { setErro(inicial ? "Escolha o animal." : "Adicione ao menos um animal — aponte o bastão RFID ou selecione manualmente."); return; }
     if (tipo === "venda") {
       if (!precoArroba || Number(precoArroba) < 0) { setErro("Informe o preço da arroba."); return; }
       if (!rendimentoCarcaca || Number(rendimentoCarcaca) <= 0 || Number(rendimentoCarcaca) > 100) { setErro("Informe um rendimento de carcaça entre 0 e 100%."); return; }
@@ -170,7 +172,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
       });
       if (inicial) {
         await dados.atualizarMovimentacao(inicial, registros[0].dados);
-      } else if (tipo === "venda" && dados.registrarMovimentacoesEmLote) {
+      } else if (dados.registrarMovimentacoesEmLote) {
         await dados.registrarMovimentacoesEmLote(registros);
       } else {
         await Promise.all(registros.map((registro) => dados.registrarMovimentacao(registro.animalId, registro.dados)));
@@ -190,56 +192,82 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
       <div style={{ ...styles.scanBox, ...(lendo ? styles.scanBoxActive : {}) }}>
         <Radio size={18} color={lendo ? "#fff" : "#1F4D45"} />
         <div style={{ ...styles.scanBoxText, color: lendo ? "#fff" : "#1F4D45" }}>
-          {lendo ? "Lendo..." : "Aponte o bastão RFID para identificar o animal"}
+          {lendo ? "Lendo..." : inicial ? "Aponte o bastão RFID para identificar o animal" : "Aponte o bastão RFID para adicionar animais à movimentação"}
         </div>
       </div>
 
       <div style={styles.card}>
         {!inicial && <SelectField label="Tipo" value={tipo} onChange={setTipo} options={Object.entries(TIPOS).map(([value, label]) => ({ value, label }))} />}
-        {tipo !== "venda" && (
+        {inicial ? (
           <SelectField
             label="Animal"
             value={animalId}
             onChange={setAnimalId}
             options={[{ value: "", label: "Selecione..." }, ...dados.animais.filter((a) => a.situacao === "ativo").map((a) => ({ value: a.id, label: a.brinco_atual }))]}
           />
-        )}
-
-        {tipo === "venda" && (
+        ) : (
           <>
-            <SectionTitle>Animais da venda</SectionTitle>
-            <div style={styles.hardwareHint}>Marque vários animais ou leia os brincos RFID em sequência. O preço e o rendimento serão aplicados a todos; o peso é informado por animal.</div>
-            {dados.animais.filter((a) => a.situacao === "ativo").map((animal) => {
-              const selecionado = animaisVenda.includes(animal.id);
-              return (
-                <div key={animal.id} style={{ ...styles.rowCard, alignItems: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={selecionado}
-                    onChange={() => setAnimaisVenda((atuais) => selecionado ? atuais.filter((id) => id !== animal.id) : [...atuais, animal.id])}
-                    aria-label={`Selecionar ${animal.brinco_atual}`}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
-                    <div style={styles.listItemSub}>{animal.raca || "Raça não informada"}</div>
+            <SectionTitle>Animais</SectionTitle>
+            <div style={styles.hardwareHint}>
+              O jeito mais rápido é apontar o bastão RFID pra cada animal — vai adicionando na lista abaixo. Também dá pra adicionar manualmente.
+            </div>
+            <SelectField
+              label="Adicionar animal manualmente"
+              value=""
+              onChange={(id) => {
+                if (!id) return;
+                setAnimaisSelecionados((atuais) => (atuais.includes(id) ? atuais : [...atuais, id]));
+              }}
+              options={[
+                { value: "", label: "Buscar por brinco..." },
+                ...dados.animais
+                  .filter((a) => a.situacao === "ativo" && !animaisSelecionados.includes(a.id))
+                  .map((a) => ({ value: a.id, label: a.brinco_atual })),
+              ]}
+            />
+            {animaisSelecionados.length === 0 ? (
+              <EmptyHint text="Nenhum animal selecionado ainda." />
+            ) : (
+              animaisSelecionados.map((id) => {
+                const animal = dados.animais.find((a) => a.id === id);
+                if (!animal) return null;
+                return (
+                  <div key={id} style={{ ...styles.rowCard, alignItems: "center" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
+                      <div style={styles.listItemSub}>{animal.raca || "Raça não informada"}</div>
+                    </div>
+                    {tipo === "venda" && (
+                      <input
+                        type="number"
+                        min="1"
+                        inputMode="decimal"
+                        value={pesosSaida[id] || ""}
+                        onChange={(e) => setPesosSaida((atuais) => ({ ...atuais, [id]: e.target.value }))}
+                        placeholder="Peso kg"
+                        aria-label={`Peso de saída de ${animal.brinco_atual}`}
+                        style={{ ...styles.input, width: 110 }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setAnimaisSelecionados((atuais) => atuais.filter((x) => x !== id))}
+                      aria-label={`Remover ${animal.brinco_atual}`}
+                      title="Remover"
+                      style={styles.iconDangerBtn}
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
-                  {selecionado && (
-                    <input
-                      type="number"
-                      min="1"
-                      inputMode="decimal"
-                      value={pesosSaida[animal.id] || ""}
-                      onChange={(e) => setPesosSaida((atuais) => ({ ...atuais, [animal.id]: e.target.value }))}
-                      placeholder="Peso kg"
-                      aria-label={`Peso de saída de ${animal.brinco_atual}`}
-                      style={{ ...styles.input, width: 110 }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-            <InputField label="Preço da arroba (R$)" type="number" value={precoArroba} onChange={setPrecoArroba} placeholder="0,00" />
-            <InputField label="Rendimento de carcaça (%)" type="number" value={rendimentoCarcaca} onChange={setRendimentoCarcaca} placeholder="Ex: 54" />
+                );
+              })
+            )}
+            {tipo === "venda" && (
+              <>
+                <InputField label="Preço da arroba (R$)" type="number" value={precoArroba} onChange={setPrecoArroba} placeholder="0,00" />
+                <InputField label="Rendimento de carcaça (%)" type="number" value={rendimentoCarcaca} onChange={setRendimentoCarcaca} placeholder="Ex: 54" />
+              </>
+            )}
           </>
         )}
 
