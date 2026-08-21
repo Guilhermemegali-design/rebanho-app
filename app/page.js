@@ -259,6 +259,9 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
   const [fazendas, setFazendas] = useState(undefined);
   const [fazendaId, setFazendaId] = useState(null);
   const [erro, setErro] = useState("");
+  const [nomeNovaFazenda, setNomeNovaFazenda] = useState("");
+  const [erroNovaFazenda, setErroNovaFazenda] = useState("");
+  const [criandoFazenda, setCriandoFazenda] = useState(false);
 
   const carregarFazendas = useCallback(async (preferidaId) => {
     const { data, error } = await supabase
@@ -300,6 +303,21 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
     return data;
   }
 
+  async function criarPrimeiraFazenda(e) {
+    e.preventDefault();
+    if (!nomeNovaFazenda.trim()) return;
+    setCriandoFazenda(true);
+    setErroNovaFazenda("");
+    try {
+      await criarFazenda(nomeNovaFazenda);
+      setNomeNovaFazenda("");
+    } catch (err) {
+      setErroNovaFazenda(err.code === "23505" ? "Já existe uma fazenda com esse nome para este cliente." : err.message);
+    } finally {
+      setCriandoFazenda(false);
+    }
+  }
+
   async function atualizarFazenda(id, mudancas) {
     const { data, error } = await supabase
       .from("rebanho_fazendas")
@@ -314,15 +332,30 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
   }
 
   if (fazendas === undefined) return <div style={styles.loadingScreen}>Carregando fazendas...</div>;
-  if (erro || !fazendaId) return (
-    <div style={styles.loginScreen}>
-      <div style={styles.loginCard}>
-        <div style={styles.loginBrand}>Fazendas do cliente</div>
-        <div style={styles.errorBox}>{erro || "Nenhuma fazenda disponível."}</div>
-        {onTrocarCliente && <button onClick={onTrocarCliente} style={styles.linkBtn}>Voltar aos clientes</button>}
+  if (erro || !fazendaId) {
+    const podeCriar = !erro && (isConsultor || papel === "administrador" || papel === "editor");
+    return (
+      <div style={styles.loginScreen}>
+        <div style={styles.loginCard}>
+          <div style={styles.loginBrand}>Fazendas do cliente</div>
+          <div style={styles.errorBox}>
+            {erro || (podeCriar ? "Este cliente ainda não tem nenhuma fazenda cadastrada. Crie a primeira abaixo." : "Nenhuma fazenda disponível. Peça ao seu consultor para cadastrar uma.")}
+          </div>
+          {podeCriar && (
+            <form onSubmit={criarPrimeiraFazenda} style={{ marginTop: 4 }}>
+              <label style={styles.field}>
+                <div style={styles.fieldLabel}>Nome da fazenda</div>
+                <input autoFocus value={nomeNovaFazenda} onChange={(e) => setNomeNovaFazenda(e.target.value)} style={styles.input} placeholder="Ex: Fazenda Santa Maria" />
+              </label>
+              {erroNovaFazenda && <div style={styles.errorBox}>{erroNovaFazenda}</div>}
+              <button type="submit" disabled={criandoFazenda || !nomeNovaFazenda.trim()} style={styles.primaryBtn}>{criandoFazenda ? "Salvando..." : "Cadastrar fazenda"}</button>
+            </form>
+          )}
+          {onTrocarCliente && <button onClick={onTrocarCliente} style={styles.linkBtn}>Voltar aos clientes</button>}
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   const fazenda = fazendas.find((item) => item.id === fazendaId) || fazendas[0];
   return (
