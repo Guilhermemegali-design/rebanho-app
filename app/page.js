@@ -23,6 +23,13 @@ import ConfiguracoesTab from "@/components/ConfiguracoesTab";
 // enxerga a fazenda em que foi vinculado via código de convite.
 const CONSULTOR_UID = "0db4e2fd-9cef-4e3f-9fb7-f974d4d22e02";
 
+// Domínio estável de produção — usado no link de redefinição de senha
+// enviado por e-mail. Nunca usar window.location.origin aqui: URLs de
+// deployment do Vercel (com hash) exigem login SSO do Vercel pra abrir,
+// e o link cairia numa dessas se o consultor disparar a redefinição a
+// partir de um preview.
+const URL_PRODUCAO = "https://rebanho-app-omega.vercel.app";
+
 export default function App() {
   const [sessao, setSessao] = useState(undefined);
 
@@ -54,10 +61,16 @@ function TelaLogin() {
       if (modo === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
         if (error) throw error;
-      } else {
+      } else if (modo === "cadastro") {
         const { error } = await supabase.auth.signUp({ email, password: senha });
         if (error) throw error;
         setErro("Conta criada! Verifique seu e-mail para confirmar o acesso e depois entre novamente.");
+      } else {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${URL_PRODUCAO}/redefinir-senha`,
+        });
+        if (error) throw error;
+        setErro("Se esse e-mail estiver cadastrado, enviamos um link para redefinir a senha. Verifique também a caixa de spam.");
       }
     } catch (err) {
       setErro(traduzErro(err.message));
@@ -66,29 +79,49 @@ function TelaLogin() {
     }
   }
 
+  const titulos = {
+    login: "Acompanhamento individual do rebanho",
+    cadastro: "Crie sua conta de acesso",
+    recuperar: "Informe o e-mail da sua conta",
+  };
+
   return (
     <div style={styles.loginScreen}>
       <div style={styles.loginCard}>
         <img src="/rastro-logo.png?v=2" alt="" style={{ width: 72, height: 72, borderRadius: 18, marginBottom: 12 }} />
         <div style={styles.loginBrand}>RASTRO</div>
-        <div style={styles.loginSub}>{modo === "login" ? "Acompanhamento individual do rebanho" : "Crie sua conta de acesso"}</div>
+        <div style={styles.loginSub}>{titulos[modo]}</div>
         <form onSubmit={handleSubmit}>
           <label style={styles.field}>
             <div style={styles.fieldLabel}>E-mail</div>
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} style={styles.input} placeholder="voce@email.com" />
           </label>
-          <label style={styles.field}>
-            <div style={styles.fieldLabel}>Senha</div>
-            <input type="password" required minLength={6} value={senha} onChange={(e) => setSenha(e.target.value)} style={styles.input} placeholder="••••••••" />
-          </label>
+          {modo !== "recuperar" && (
+            <label style={styles.field}>
+              <div style={styles.fieldLabel}>Senha</div>
+              <input type="password" required minLength={6} value={senha} onChange={(e) => setSenha(e.target.value)} style={styles.input} placeholder="••••••••" />
+            </label>
+          )}
           {erro && <div style={styles.errorBox}>{erro}</div>}
           <button type="submit" disabled={carregando} style={styles.primaryBtn}>
-            {carregando ? "Aguarde..." : modo === "login" ? "Entrar" : "Criar conta"}
+            {carregando ? "Aguarde..." : modo === "login" ? "Entrar" : modo === "cadastro" ? "Criar conta" : "Enviar link de redefinição"}
           </button>
         </form>
-        <button onClick={() => setModo(modo === "login" ? "cadastro" : "login")} style={styles.linkBtn}>
-          {modo === "login" ? "Recebeu um código do seu consultor? Criar conta" : "Já tem conta? Entrar"}
-        </button>
+        {modo === "login" && (
+          <>
+            <button onClick={() => { setModo("cadastro"); setErro(""); }} style={styles.linkBtn}>
+              Recebeu um código do seu consultor? Criar conta
+            </button>
+            <button onClick={() => { setModo("recuperar"); setErro(""); }} style={styles.linkBtn}>
+              Esqueci minha senha
+            </button>
+          </>
+        )}
+        {modo !== "login" && (
+          <button onClick={() => { setModo("login"); setErro(""); }} style={styles.linkBtn}>
+            Já tem conta? Entrar
+          </button>
+        )}
       </div>
     </div>
   );
