@@ -105,6 +105,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const [animalId, setAnimalId] = useState(inicial?.animal_id || "");
   const [animaisSelecionados, setAnimaisSelecionados] = useState([]);
   const [buscaDigitada, setBuscaDigitada] = useState("");
+  const [loteParaAdicionar, setLoteParaAdicionar] = useState("");
   const [pesosSaida, setPesosSaida] = useState({});
   const [tipo, setTipo] = useState(inicial?.tipo || "transferencia_lote");
   const [loteDestinoId, setLoteDestinoId] = useState(inicial?.lote_destino_id || "");
@@ -144,6 +145,18 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
     setBuscaDigitada(valor);
     const animal = encontrarAnimalPorTag(dados.animais, valor.trim());
     if (animal) adicionarAnimal(animal);
+  }
+
+  const animaisDoLoteParaAdicionar = useMemo(() => {
+    if (!loteParaAdicionar) return [];
+    return dados.animais.filter((a) => a.situacao === "ativo" && a.lote_atual_id === loteParaAdicionar);
+  }, [dados.animais, loteParaAdicionar]);
+
+  function adicionarLoteInteiro() {
+    const ids = animaisDoLoteParaAdicionar.map((a) => a.id);
+    setAnimaisSelecionados((atuais) => [...atuais, ...ids.filter((id) => !atuais.includes(id))]);
+    setLoteParaAdicionar("");
+    setErro("");
   }
 
   const resultadosBusca = useMemo(() => {
@@ -234,8 +247,24 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
           <>
             <SectionTitle>Animais</SectionTitle>
             <div style={styles.hardwareHint}>
-              O jeito mais rápido é apontar o bastão RFID pra cada animal — vai adicionando na lista abaixo. Sem o bastão à mão, dá pra digitar o brinco aqui também.
+              O jeito mais rápido é apontar o bastão RFID pra cada animal — vai adicionando na lista abaixo. Sem o bastão à mão, dá pra digitar o brinco ou adicionar um lote inteiro de uma vez.
             </div>
+            <SelectField
+              label="Adicionar um lote inteiro (ex: vender/abater o lote todo)"
+              value={loteParaAdicionar}
+              onChange={setLoteParaAdicionar}
+              options={[
+                { value: "", label: "Selecione um lote..." },
+                ...dados.lotes
+                  .filter((l) => l.situacao === "ativo")
+                  .map((l) => ({ value: l.id, label: `${l.nome} (${dados.animais.filter((a) => a.situacao === "ativo" && a.lote_atual_id === l.id).length} animais)` })),
+              ]}
+            />
+            {loteParaAdicionar && (
+              <button type="button" onClick={adicionarLoteInteiro} style={{ ...styles.editLinkBtn, marginBottom: 14 }}>
+                Adicionar os {animaisDoLoteParaAdicionar.length} animais deste lote
+              </button>
+            )}
             <div style={{ ...styles.field, position: "relative" }}>
               <div style={styles.fieldLabel}>Digitar o brinco</div>
               <div style={{ ...styles.tableSearchBox, border: "1px solid #E8E6DF" }}>
