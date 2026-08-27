@@ -14,7 +14,13 @@ const TIPOS = {
   saida: "Saída",
   morte: "Morte",
   venda: "Venda",
+  abate: "Abate",
 };
+
+// Venda e abate usam os mesmos campos (peso de saída, preço da arroba,
+// rendimento de carcaça) — só mudam a situação que o animal assume
+// depois (vendido x abatido).
+const TIPOS_COM_PESO_SAIDA = ["venda", "abate"];
 
 export default function MovimentacoesTab({ dados }) {
   const [modo, setModo] = useState("lista");
@@ -66,7 +72,7 @@ export default function MovimentacoesTab({ dados }) {
               <div style={styles.listItemTitle}>{animal ? animal.brinco_atual : "—"} · {TIPOS[m.tipo] || m.tipo}</div>
               <div style={styles.listItemSub}>
                 {formatDataBR(m.data)}
-                {m.tipo === "venda" ? ` · ${formatKg(m.peso_saida)} · ${formatBRL(m.preco_arroba)}/@ · ${m.rendimento_carcaca ?? "—"}% carcaça` : ""}
+                {TIPOS_COM_PESO_SAIDA.includes(m.tipo) ? ` · ${formatKg(m.peso_saida)} · ${formatBRL(m.preco_arroba)}/@ · ${m.rendimento_carcaca ?? "—"}% carcaça` : ""}
                 {m.observacoes ? ` · ${m.observacoes}` : ""}
                 {!m.id ? " · aguardando sincronizar" : ""}
               </div>
@@ -174,7 +180,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   async function handleSalvar() {
     const idsSelecionados = inicial ? [animalId].filter(Boolean) : animaisSelecionados;
     if (idsSelecionados.length === 0) { setErro(inicial ? "Escolha o animal." : "Adicione ao menos um animal — aponte o bastão RFID ou selecione manualmente."); return; }
-    if (tipo === "venda") {
+    if (TIPOS_COM_PESO_SAIDA.includes(tipo)) {
       if (!precoArroba || Number(precoArroba) < 0) { setErro("Informe o preço da arroba."); return; }
       if (!rendimentoCarcaca || Number(rendimentoCarcaca) <= 0 || Number(rendimentoCarcaca) > 100) { setErro("Informe um rendimento de carcaça entre 0 e 100%."); return; }
       const semPeso = idsSelecionados.find((id) => !pesosSaida[id] || Number(pesosSaida[id]) <= 0);
@@ -201,7 +207,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
           payload.local_destino_id = localDestinoId || null;
           payload.local_origem_id = animal?.local_atual_id || null;
         }
-        if (tipo === "venda") {
+        if (TIPOS_COM_PESO_SAIDA.includes(tipo)) {
           payload.peso_saida = Number(pesosSaida[id]);
           payload.preco_arroba = Number(precoArroba);
           payload.rendimento_carcaca = Number(rendimentoCarcaca);
@@ -308,7 +314,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
                       <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
                       <div style={styles.listItemSub}>{animal.raca || "Raça não informada"}</div>
                     </div>
-                    {tipo === "venda" && (
+                    {TIPOS_COM_PESO_SAIDA.includes(tipo) && (
                       <input
                         type="number"
                         min="1"
@@ -333,7 +339,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
                 );
               })
             )}
-            {tipo === "venda" && (
+            {TIPOS_COM_PESO_SAIDA.includes(tipo) && (
               <>
                 <InputField label="Preço da arroba (R$)" type="number" value={precoArroba} onChange={setPrecoArroba} placeholder="0,00" />
                 <InputField label="Rendimento de carcaça (%)" type="number" value={rendimentoCarcaca} onChange={setRendimentoCarcaca} placeholder="Ex: 54" />

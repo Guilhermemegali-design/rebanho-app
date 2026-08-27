@@ -27,7 +27,7 @@ export default function GmdAbatidosTab({ dados, onAbrirAnimal }) {
         (!categoriaFiltro || item.animal.categoria === categoriaFiltro) &&
         (!sexoFiltro || item.animal.sexo === sexoFiltro)
       ))
-      .sort((a, b) => (b.venda.data || "").localeCompare(a.venda.data || ""));
+      .sort((a, b) => (b.abate.data || "").localeCompare(a.abate.data || ""));
   }, [abatidos, racaFiltro, categoriaFiltro, sexoFiltro]);
 
   const gmdMedio = useMemo(() => {
@@ -38,7 +38,7 @@ export default function GmdAbatidosTab({ dados, onAbrirAnimal }) {
 
   return (
     <div>
-      <PageHeader title="GMD de abatidos" subtitle="Ganho médio diário dos animais vendidos/abatidos, do peso de entrada até a venda." />
+      <PageHeader title="GMD de abatidos" subtitle="Ganho médio diário dos animais abatidos, do peso de entrada até o peso de saída do abate." />
 
       <div style={styles.kpiGrid}>
         <div style={styles.kpiCard}>
@@ -84,13 +84,13 @@ export default function GmdAbatidosTab({ dados, onAbrirAnimal }) {
                   <th style={styles.tableTh}>Categoria</th>
                   <th style={styles.tableTh}>Sexo</th>
                   <th style={styles.tableTh}>Entrada</th>
-                  <th style={styles.tableTh}>Saída (venda)</th>
+                  <th style={styles.tableTh}>Saída (abate)</th>
                   <th style={styles.tableTh}>GMD</th>
                   <th style={styles.tableTh}></th>
                 </tr>
               </thead>
               <tbody>
-                {filtrados.map(({ animal, venda, gmd }) => (
+                {filtrados.map(({ animal, abate, gmd }) => (
                   <tr key={animal.id} style={styles.tableRow} onClick={() => onAbrirAnimal?.(animal.id)}>
                     <td style={styles.tableTd}>
                       <div style={styles.tableCellTitle}>{animal.brinco_atual}</div>
@@ -103,8 +103,8 @@ export default function GmdAbatidosTab({ dados, onAbrirAnimal }) {
                       <div style={styles.tableCellSub}>{formatDataBR(animal.data_entrada)}</div>
                     </td>
                     <td style={styles.tableTd}>
-                      <div style={styles.tableCellStrong}>{formatKg(venda.peso_saida)}</div>
-                      <div style={styles.tableCellSub}>{formatDataBR(venda.data)}</div>
+                      <div style={styles.tableCellStrong}>{formatKg(abate.peso_saida)}</div>
+                      <div style={styles.tableCellSub}>{formatDataBR(abate.data)}</div>
                     </td>
                     <td style={styles.tableTd}>
                       {gmd != null ? <span style={gmd >= 0.5 ? styles.gmdBom : styles.gmdBaixo}>{gmd.toFixed(3)} kg/d</span> : "—"}
@@ -116,7 +116,7 @@ export default function GmdAbatidosTab({ dados, onAbrirAnimal }) {
             </table>
           </div>
           <div className="card-view" style={{ padding: "10px 12px" }}>
-            {filtrados.map(({ animal, venda, gmd }) => (
+            {filtrados.map(({ animal, abate, gmd }) => (
               <button
                 key={animal.id}
                 type="button"
@@ -128,7 +128,7 @@ export default function GmdAbatidosTab({ dados, onAbrirAnimal }) {
                   <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
                   <div style={styles.listItemSub}>{[animal.categoria, animal.raca].filter(Boolean).join(" · ") || "Sem categoria"}</div>
                   <div style={{ ...styles.listItemSub, marginTop: 4 }}>
-                    {formatKg(animal.peso_entrada)} → {formatKg(venda.peso_saida)} em {formatDataBR(venda.data)}
+                    {formatKg(animal.peso_entrada)} → {formatKg(abate.peso_saida)} em {formatDataBR(abate.data)}
                   </div>
                 </div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>

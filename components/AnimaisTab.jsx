@@ -10,7 +10,7 @@ import { enviarDocumentoRebanho } from "@/lib/storage";
 import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, Bluetooth, BluetoothConnected, ArrowLeftRight, Syringe, Trash2, Pencil } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
-const SITUACOES = { ativo: "Ativo", vendido: "Vendido", morto: "Morto", transferido: "Transferido" };
+const SITUACOES = { ativo: "Ativo", vendido: "Vendido", abatido: "Abatido", morto: "Morto", transferido: "Transferido" };
 const STATUS_BADGE_STYLE = { ativo: styles.statusBadgeAtivo, atencao: styles.statusBadgeAtencao, carencia: styles.statusBadgeCarencia, neutro: styles.tagOrange };
 const RACAS = ["Nelore", "Nelorado", "F1 Angus", "Cruzado", "Guzera", "Guzeratado"];
 
@@ -910,7 +910,7 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
       itens.push({ id: p.id || p.client_uuid, data: p.data, tipo: "pesagem", registro: p, icone: Scale, titulo: `Pesagem: ${formatKg(p.peso)}`, sub: p.origem_peso === "bluetooth" ? "Via balança Bluetooth" : "Digitado manualmente" });
     }
     for (const m of dados.movimentacoes.filter((x) => x.animal_id === animal.id)) {
-      const dadosVenda = m.tipo === "venda"
+      const dadosVenda = (m.tipo === "venda" || m.tipo === "abate")
         ? [`Peso: ${formatKg(m.peso_saida)}`, `Arroba: ${formatBRL(m.preco_arroba)}`, `Rendimento: ${m.rendimento_carcaca ?? "—"}%`].join(" · ")
         : "";
       itens.push({ id: m.id || m.client_uuid, data: m.data, tipo: "movimentacao", registro: m, icone: ArrowLeftRight, titulo: rotuloMovimentacao(m), sub: [dadosVenda, m.observacoes].filter(Boolean).join(" · ") });
@@ -1147,6 +1147,7 @@ function rotuloMovimentacao(m) {
     saida: "Saída",
     morte: "Morte registrada",
     venda: "Venda",
+    abate: "Abate",
   };
   return mapa[m.tipo] || m.tipo;
 }
