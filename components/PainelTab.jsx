@@ -2,12 +2,13 @@
 
 import { useMemo, useRef, useState } from "react";
 import { styles } from "@/lib/styles";
-import { formatKg, formatDataBR, calcularGmd } from "@/lib/format";
+import { formatKg, formatDataBR, calcularGmd, diasEntre } from "@/lib/format";
 import { calcularAlertas } from "@/lib/alerts";
-import { Users, TrendingUp, AlertTriangle, Syringe, Scale, ChevronLeft, ChevronRight, Tag } from "lucide-react";
+import { calcularAnimaisAbatidos } from "@/lib/abatidos";
+import { Users, TrendingUp, AlertTriangle, Syringe, Scale, ChevronLeft, ChevronRight, Tag, Skull } from "lucide-react";
 import { EmptyHint, PageHeader } from "@/components/UI";
 
-export default function PainelTab({ dados, onAbrirAnimal }) {
+export default function PainelTab({ dados, onAbrirAnimal, onAbrirGmdAbatidos }) {
   const { locais, lotes } = dados;
   const [loteSelecionadoId, setLoteSelecionadoId] = useState(null);
   const lotesSectionRef = useRef(null);
@@ -57,6 +58,27 @@ export default function PainelTab({ dados, onAbrirAnimal }) {
   // existe uma tabela separada de alertas pra sincronizar.
   const todosAlertas = useMemo(() => calcularAlertas({ animais, pesagens, procedimentos }), [animais, pesagens, procedimentos]);
   const alertas = todosAlertas.slice(0, 5);
+
+  const gmdAbatidosMedio = useMemo(() => {
+    const abatidos = calcularAnimaisAbatidos(animais, dados.movimentacoes);
+    const validos = abatidos.map((i) => i.gmd).filter((v) => v != null);
+    if (validos.length === 0) return null;
+    return validos.reduce((s, v) => s + v, 0) / validos.length;
+  }, [animais, dados.movimentacoes]);
+
+  // Mortalidade: mortes registradas nos últimos 12 meses sobre o rebanho
+  // atual + essas mortes (aproximação do tamanho do plantel no período,
+  // já que não guardamos a contagem de cabeças dia a dia).
+  const hoje = new Date().toISOString().slice(0, 10);
+  const mortes12Meses = useMemo(() => {
+    const idsDoEscopo = new Set(animais.map((a) => a.id));
+    return dados.movimentacoes.filter((m) => (
+      m.tipo === "morte" && idsDoEscopo.has(m.animal_id) && diasEntre(m.data, hoje) != null && diasEntre(m.data, hoje) <= 365
+    )).length;
+  }, [animais, dados.movimentacoes, hoje]);
+  const percentualMortalidade = (ativos.length + mortes12Meses) > 0
+    ? (mortes12Meses / (ativos.length + mortes12Meses)) * 100
+    : null;
 
   const lotesAtivos = lotes.filter((l) => l.situacao === "ativo");
   const animaisDoLote = useMemo(() => {
@@ -116,6 +138,22 @@ export default function PainelTab({ dados, onAbrirAnimal }) {
           <div style={styles.kpiValor}>{loteSelecionado ? 1 : lotesAtivos.length}</div>
           <div style={{ ...styles.listItemSub, marginTop: 4 }}>{loteSelecionado ? "Voltar aos lotes" : "Clique para escolher um lote"}</div>
         </button>
+        {onAbrirGmdAbatidos ? (
+          <button type="button" onClick={onAbrirGmdAbatidos} style={{ ...styles.kpiCard, border: "1px solid #E8E5DE", textAlign: "left", cursor: "pointer" }}>
+            <div style={styles.kpiHeader}><TrendingUp size={14} /> GMD abatidos</div>
+            <div style={styles.kpiValor}>{gmdAbatidosMedio != null ? `${gmdAbatidosMedio.toFixed(3)} kg/d` : "—"}</div>
+            <div style={{ ...styles.listItemSub, marginTop: 4 }}>Ver detalhes</div>
+          </button>
+        ) : (
+          <div style={styles.kpiCard}>
+            <div style={styles.kpiHeader}><TrendingUp size={14} /> GMD abatidos</div>
+            <div style={styles.kpiValor}>{gmdAbatidosMedio != null ? `${gmdAbatidosMedio.toFixed(3)} kg/d` : "—"}</div>
+          </div>
+        )}
+        <div style={styles.kpiCard}>
+          <div style={styles.kpiHeader}><Skull size={14} /> Mortalidade 12 meses</div>
+          <div style={styles.kpiValor}>{mortes12Meses}{percentualMortalidade != null ? ` · ${percentualMortalidade.toFixed(1)}%` : ""}</div>
+        </div>
       </div>
 
       {!loteSelecionado && (

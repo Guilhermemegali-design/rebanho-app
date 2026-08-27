@@ -15,6 +15,7 @@ import MovimentacoesTab from "@/components/MovimentacoesTab";
 import PesagensTab from "@/components/PesagensTab";
 import SanidadeTab from "@/components/SanidadeTab";
 import AlertasTab from "@/components/AlertasTab";
+import GmdAbatidosTab from "@/components/GmdAbatidosTab";
 import ConfiguracoesTab from "@/components/ConfiguracoesTab";
 
 // Mesmo UID do consultor usado no Consultoria-main e no
@@ -541,6 +542,7 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
                     setAnimalAbrirId(animalId);
                     setTab("animais");
                   }}
+                  onAbrirGmdAbatidos={() => setTab("gmd-abatidos")}
                 />
               )}
               {tab === "animais" && (
@@ -554,6 +556,15 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
               {tab === "movimentacoes" && <MovimentacoesTab dados={dados} />}
               {tab === "pesagens" && <PesagensTab dados={dados} />}
               {tab === "sanidade" && <SanidadeTab dados={dados} />}
+              {tab === "gmd-abatidos" && (
+                <GmdAbatidosTab
+                  dados={dados}
+                  onAbrirAnimal={(animalId) => {
+                    setAnimalAbrirId(animalId);
+                    setTab("animais");
+                  }}
+                />
+              )}
               {tab === "alertas" && <AlertasTab dados={dados} />}
               {tab === "configuracoes" && (
                 <ConfiguracoesTab

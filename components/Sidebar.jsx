@@ -9,6 +9,7 @@ import {
   Stethoscope,
   ArrowLeftRight,
   AlertTriangle,
+  TrendingUp,
   Settings,
   LogOut,
   X,
@@ -21,6 +22,7 @@ export const ABAS_SIDEBAR = [
   { id: "pesagens", label: "Pesagens", icon: Scale },
   { id: "sanidade", label: "Sanidade", icon: Stethoscope },
   { id: "movimentacoes", label: "Movimentações", icon: ArrowLeftRight },
+  { id: "gmd-abatidos", label: "GMD de abatidos", icon: TrendingUp },
   { id: "alertas", label: "Alertas", icon: AlertTriangle },
 ];
 
