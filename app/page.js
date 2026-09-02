@@ -31,6 +31,7 @@ const CONSULTOR_UID = "0db4e2fd-9cef-4e3f-9fb7-f974d4d22e02";
 // e o link cairia numa dessas se o consultor disparar a redefinição a
 // partir de um preview.
 const URL_PRODUCAO = "https://rebanho-app-omega.vercel.app";
+const CACHE_USUARIO_OFFLINE = "rastro-usuario-offline";
 
 function lerCacheJson(chave, padrao = []) {
   try {
@@ -51,9 +52,40 @@ export default function App() {
   const [sessao, setSessao] = useState(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSessao(data.session));
-    const { data: listener } = supabase.auth.onAuthStateChange((_e, session) => setSessao(session));
-    return () => listener.subscription.unsubscribe();
+    let limiteOffline;
+    function aplicarSessao(session, evento) {
+      window.clearTimeout(limiteOffline);
+      if (session?.user) {
+        salvarCacheJson(CACHE_USUARIO_OFFLINE, {
+          id: session.user.id,
+          email: session.user.email,
+        });
+        setSessao(session);
+        return;
+      }
+
+      if (evento === "SIGNED_OUT") {
+        localStorage.removeItem(CACHE_USUARIO_OFFLINE);
+        setSessao(null);
+        return;
+      }
+
+      const usuarioSalvo = lerCacheJson(CACHE_USUARIO_OFFLINE, null);
+      setSessao(usuarioSalvo?.id ? { user: usuarioSalvo, offline: true } : null);
+    }
+
+    // Em algumas versões do WebView, getSession pode ficar aguardando a
+    // renovação do token quando não existe sinal. Não deixa a abertura do
+    // app presa em "Carregando": recupera a identidade salva no aparelho.
+    limiteOffline = window.setTimeout(() => aplicarSessao(null), 1500);
+    supabase.auth.getSession()
+      .then(({ data }) => aplicarSessao(data.session))
+      .catch(() => aplicarSessao(null));
+    const { data: listener } = supabase.auth.onAuthStateChange((evento, session) => aplicarSessao(session, evento));
+    return () => {
+      window.clearTimeout(limiteOffline);
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   if (sessao === undefined) return <div style={styles.loadingScreen}>Carregando...</div>;
@@ -214,6 +246,10 @@ function ResolveAcessoOperador({ sessao }) {
 
   const carregarVinculos = useCallback(async () => {
     const chaveCache = `rastro-vinculos-${sessao.user.id}`;
+    if (!navigator.onLine) {
+      setVinculos(lerCacheJson(chaveCache));
+      return;
+    }
     const { data, error } = await supabase
       .from("clientes_usuarios")
       .select("cliente_id, papel, fazenda_id, clientes(id, nome, consultor_id)")
@@ -236,12 +272,12 @@ function ResolveAcessoOperador({ sessao }) {
 
   if (fazendaEscolhida) {
     const vinculo = vinculos.find((v) => v.cliente_id === fazendaEscolhida.id);
-    return <AmbienteCliente consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} papel={vinculo?.papel || "editor"} fazendaRestrita={vinculo?.fazenda_id || null} onTrocarCliente={() => setFazendaEscolhida(null)} />;
+    return <AmbienteCliente consultorId={fazendaEscolhida.consultor_id || CONSULTOR_UID} usuarioId={sessao.user.id} usuarioEmail={sessao.user.email} clienteId={fazendaEscolhida.id} clienteNome={fazendaEscolhida.nome} isConsultor={false} papel={vinculo?.papel || "editor"} fazendaRestrita={vinculo?.fazenda_id || null} onTrocarCliente={() => setFazendaEscolhida(null)} />;
   }
 
   if (vinculos.length === 1) {
     const c = vinculos[0].clientes;
-    return <AmbienteCliente consultorId={c.consultor_id || CONSULTOR_UID} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} papel={vinculos[0].papel || "editor"} fazendaRestrita={vinculos[0].fazenda_id || null} />;
+    return <AmbienteCliente consultorId={c.consultor_id || CONSULTOR_UID} usuarioId={sessao.user.id} usuarioEmail={sessao.user.email} clienteId={c.id} clienteNome={c.nome} isConsultor={false} papel={vinculos[0].papel || "editor"} fazendaRestrita={vinculos[0].fazenda_id || null} />;
   }
 
   return (
@@ -268,6 +304,10 @@ function SeletorFazendaConsultor({ sessao }) {
 
   useEffect(() => {
     const chaveCache = `rastro-clientes-${sessao.user.id}`;
+    if (!navigator.onLine) {
+      setClientes(lerCacheJson(chaveCache));
+      return;
+    }
     supabase
       .from("clientes")
       .select("id, nome")
@@ -288,6 +328,7 @@ function SeletorFazendaConsultor({ sessao }) {
     return (
       <AmbienteCliente
         consultorId={sessao.user.id}
+        usuarioId={sessao.user.id}
         usuarioEmail={sessao.user.email}
         clienteId={fazendaEscolhida.id}
         clienteNome={fazendaEscolhida.nome}
@@ -321,7 +362,7 @@ function SeletorFazendaConsultor({ sessao }) {
 
 const DATA_FORMATTER = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
 
-function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", fazendaRestrita = null, onTrocarCliente }) {
+function AmbienteCliente({ consultorId, usuarioId, usuarioEmail, clienteId, clienteNome, isConsultor, papel = "administrador", fazendaRestrita = null, onTrocarCliente }) {
   const [fazendas, setFazendas] = useState(undefined);
   const [fazendaId, setFazendaId] = useState(null);
   const [erro, setErro] = useState("");
@@ -331,6 +372,18 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
 
   const carregarFazendas = useCallback(async (preferidaId) => {
     const chaveCache = `rastro-fazendas-${clienteId}`;
+    const usarCache = () => {
+      const listaCache = lerCacheJson(chaveCache);
+      setErro(listaCache.length ? "" : "Conecte-se uma vez à internet para baixar esta fazenda no aparelho.");
+      setFazendas(listaCache);
+      const salva = localStorage.getItem(`rastro-fazenda-${clienteId}`);
+      const escolhida = fazendaRestrita || preferidaId || (listaCache.some((item) => item.id === salva) ? salva : listaCache[0]?.id);
+      setFazendaId(escolhida || null);
+    };
+    if (!navigator.onLine) {
+      usarCache();
+      return;
+    }
     const { data, error } = await supabase
       .from("rebanho_fazendas")
       .select("id, nome, ativo")
@@ -338,12 +391,7 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
       .eq("ativo", true)
       .order("nome");
     if (error) {
-      const listaCache = lerCacheJson(chaveCache);
-      setErro(listaCache.length ? "" : "Conecte-se uma vez à internet para baixar esta fazenda no aparelho.");
-      setFazendas(listaCache);
-      const salva = localStorage.getItem(`rastro-fazenda-${clienteId}`);
-      const escolhida = fazendaRestrita || preferidaId || (listaCache.some((item) => item.id === salva) ? salva : listaCache[0]?.id);
-      setFazendaId(escolhida || null);
+      usarCache();
       return;
     }
     const lista = data || [];
@@ -439,6 +487,7 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
   return (
     <AppPrincipal
       consultorId={consultorId}
+      usuarioId={usuarioId}
       usuarioEmail={usuarioEmail}
       clienteId={clienteId}
       clienteNome={clienteNome}
@@ -456,7 +505,7 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
 }
 
 // ---------- App principal (depois de resolvido o acesso) ----------
-function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazenda, fazendas, onSelecionarFazenda, onCriarFazenda, onAtualizarFazenda, isConsultor, papel = "administrador", fazendaRestrita = false, onTrocarCliente }) {
+function AppPrincipal({ consultorId, usuarioId, usuarioEmail, clienteId, clienteNome, fazenda, fazendas, onSelecionarFazenda, onCriarFazenda, onAtualizarFazenda, isConsultor, papel = "administrador", fazendaRestrita = false, onTrocarCliente }) {
   const [tab, setTab] = useState("painel");
   const [menuAberto, setMenuAberto] = useState(false);
   const [animalAbrirId, setAnimalAbrirId] = useState(null);
@@ -464,7 +513,7 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
   const [nomeNovaFazenda, setNomeNovaFazenda] = useState("");
   const [erroFazenda, setErroFazenda] = useState("");
   const [salvandoFazenda, setSalvandoFazenda] = useState(false);
-  const dados = useDadosRebanho(consultorId, clienteId, fazenda.id);
+  const dados = useDadosRebanho(consultorId, clienteId, fazenda.id, usuarioId);
   const { online, sincronizando, pendentes, ultimoResultado, sincronizar } = useConexao(consultorId);
   const podeEditar = isConsultor || papel === "administrador" || papel === "editor";
   const podeTrocarFazenda = !fazendaRestrita;

@@ -221,10 +221,28 @@ export default function MapaFazenda({ dados }) {
     if (busca.trim().length < 3) return;
     setProcessando(true);
     try {
-      const resposta = await fetch(`/api/geocodificar?q=${encodeURIComponent(busca.trim())}`);
+      // Consulta direta com CORS para permitir que a mesma tela funcione
+      // tanto no site quanto no APK com os arquivos embarcados. Somente a
+      // busca precisa de internet; mapas já carregados continuam locais.
+      const url = new URL("https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates");
+      url.searchParams.set("SingleLine", busca.trim());
+      url.searchParams.set("f", "json");
+      url.searchParams.set("countryCode", "BRA");
+      url.searchParams.set("maxLocations", "5");
+      url.searchParams.set("outFields", "Match_addr");
+      const resposta = await fetch(url);
+      if (!resposta.ok) throw new Error("Falha ao consultar o mapa.");
       const json = await resposta.json();
-      setResultados(json.resultados || []);
-      if (!json.resultados?.length) setMensagem("Nenhum local encontrado. Tente município, estado e nome da fazenda.");
+      const encontrados = (json.candidates || []).map((item) => ({
+        nome: item.address,
+        latitude: Number(item.location?.y),
+        longitude: Number(item.location?.x),
+        caixa: item.extent
+          ? [item.extent.ymin, item.extent.ymax, item.extent.xmin, item.extent.xmax]
+          : null,
+      }));
+      setResultados(encontrados);
+      if (!encontrados.length) setMensagem("Nenhum local encontrado. Tente município, estado e nome da fazenda.");
     } catch {
       setMensagem("A busca precisa de internet. Você ainda pode importar o KML.");
     } finally {

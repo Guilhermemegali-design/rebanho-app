@@ -1,9 +1,8 @@
 {
   "appId": "br.com.rastro.rebanho",
   "appName": "RASTRO",
-  "webDir": "public",
+  "webDir": "out",
   "server": {
-    "url": "https://rebanho-app-omega.vercel.app",
     "androidScheme": "https",
     "cleartext": false
   },
