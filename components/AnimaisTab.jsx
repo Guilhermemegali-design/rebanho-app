@@ -589,7 +589,11 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
           <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setNotaFiscalFile(e.target.files?.[0] || null)} />
           {!notaFiscalFile && inicial?.nota_fiscal_url && (
             <div style={{ fontSize: 12, marginTop: 4 }}>
-              <a href={inicial.nota_fiscal_url} target="_blank" rel="noopener noreferrer">Ver nota fiscal já anexada</a>
+              {inicial.nota_fiscal_url.startsWith("rastro-pendente://") ? (
+                <span>Anexo salvo no aparelho · aguardando sincronização</span>
+              ) : (
+                <a href={inicial.nota_fiscal_url} target="_blank" rel="noopener noreferrer">Ver nota fiscal já anexada</a>
+              )}
             </div>
           )}
         </label>
@@ -1002,7 +1006,12 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
         <Field label="Fornecedor" value={fornecedor ? fornecedor.nome : "—"} />
         <Field label="Entrada" value={`${formatDataBR(animal.data_entrada)} · ${formatKg(animal.peso_entrada)} · ${formatBRL(animal.valor_entrada)}`} />
         {animal.nota_fiscal_url && (
-          <Field label="Nota fiscal" value={<a href={animal.nota_fiscal_url} target="_blank" rel="noopener noreferrer">Ver arquivo anexado</a>} />
+          <Field
+            label="Nota fiscal"
+            value={animal.nota_fiscal_url.startsWith("rastro-pendente://")
+              ? "Anexo salvo no aparelho · aguardando sincronização"
+              : <a href={animal.nota_fiscal_url} target="_blank" rel="noopener noreferrer">Ver arquivo anexado</a>}
+          />
         )}
         {animal.observacoes && <Field label="Observações" value={animal.observacoes} multiline />}
       </div>

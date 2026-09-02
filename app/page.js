@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { styles } from "@/lib/styles";
 import { useDadosRebanho } from "@/lib/useDadosRebanho";
 import { useConexao } from "@/lib/useConexao";
+import { gerarUuidLocal, salvarOperacaoLocal } from "@/lib/db";
 import { calcularAlertas } from "@/lib/alerts";
 import { Wifi, WifiOff, RefreshCw, Menu, Plus, X } from "lucide-react";
 import Sidebar, { ABAS_SIDEBAR } from "@/components/Sidebar";
@@ -30,6 +31,21 @@ const CONSULTOR_UID = "0db4e2fd-9cef-4e3f-9fb7-f974d4d22e02";
 // e o link cairia numa dessas se o consultor disparar a redefinição a
 // partir de um preview.
 const URL_PRODUCAO = "https://rebanho-app-omega.vercel.app";
+
+function lerCacheJson(chave, padrao = []) {
+  try {
+    const valor = localStorage.getItem(chave);
+    return valor ? JSON.parse(valor) : padrao;
+  } catch {
+    return padrao;
+  }
+}
+
+function salvarCacheJson(chave, valor) {
+  try {
+    localStorage.setItem(chave, JSON.stringify(valor));
+  } catch {}
+}
 
 export default function App() {
   const [sessao, setSessao] = useState(undefined);
@@ -197,11 +213,18 @@ function ResolveAcessoOperador({ sessao }) {
   const [fazendaEscolhida, setFazendaEscolhida] = useState(null);
 
   const carregarVinculos = useCallback(async () => {
-    const { data } = await supabase
+    const chaveCache = `rastro-vinculos-${sessao.user.id}`;
+    const { data, error } = await supabase
       .from("clientes_usuarios")
       .select("cliente_id, papel, fazenda_id, clientes(id, nome, consultor_id)")
       .eq("auth_user_id", sessao.user.id);
-    setVinculos(data || []);
+    if (error) {
+      setVinculos(lerCacheJson(chaveCache));
+      return;
+    }
+    const lista = data || [];
+    salvarCacheJson(chaveCache, lista);
+    setVinculos(lista);
   }, [sessao.user.id]);
 
   useEffect(() => {
@@ -244,12 +267,21 @@ function SeletorFazendaConsultor({ sessao }) {
   const [fazendaEscolhida, setFazendaEscolhida] = useState(null);
 
   useEffect(() => {
+    const chaveCache = `rastro-clientes-${sessao.user.id}`;
     supabase
       .from("clientes")
       .select("id, nome")
       .eq("consultor_id", sessao.user.id)
       .order("nome")
-      .then(({ data }) => setClientes(data || []));
+      .then(({ data, error }) => {
+        if (error) {
+          setClientes(lerCacheJson(chaveCache));
+          return;
+        }
+        const lista = data || [];
+        salvarCacheJson(chaveCache, lista);
+        setClientes(lista);
+      });
   }, [sessao.user.id]);
 
   if (fazendaEscolhida) {
@@ -298,6 +330,7 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
   const [criandoFazenda, setCriandoFazenda] = useState(false);
 
   const carregarFazendas = useCallback(async (preferidaId) => {
+    const chaveCache = `rastro-fazendas-${clienteId}`;
     const { data, error } = await supabase
       .from("rebanho_fazendas")
       .select("id, nome, ativo")
@@ -305,11 +338,16 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
       .eq("ativo", true)
       .order("nome");
     if (error) {
-      setErro(error.message);
-      setFazendas([]);
+      const listaCache = lerCacheJson(chaveCache);
+      setErro(listaCache.length ? "" : "Conecte-se uma vez à internet para baixar esta fazenda no aparelho.");
+      setFazendas(listaCache);
+      const salva = localStorage.getItem(`rastro-fazenda-${clienteId}`);
+      const escolhida = fazendaRestrita || preferidaId || (listaCache.some((item) => item.id === salva) ? salva : listaCache[0]?.id);
+      setFazendaId(escolhida || null);
       return;
     }
     const lista = data || [];
+    salvarCacheJson(chaveCache, lista);
     setFazendas(lista);
     const salva = localStorage.getItem(`rastro-fazenda-${clienteId}`);
     const escolhida = fazendaRestrita || preferidaId || (lista.some((item) => item.id === salva) ? salva : lista[0]?.id);
@@ -326,15 +364,19 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
   }
 
   async function criarFazenda(nome) {
-    const { data, error } = await supabase
-      .from("rebanho_fazendas")
-      .insert({ consultor_id: consultorId, cliente_id: clienteId, nome: nome.trim() })
-      .select("id, nome, ativo")
-      .single();
-    if (error) throw error;
-    await carregarFazendas(data.id);
-    localStorage.setItem(`rastro-fazenda-${clienteId}`, data.id);
-    return data;
+    const agora = new Date().toISOString();
+    const registroCompleto = {
+      id: gerarUuidLocal(), consultor_id: consultorId, cliente_id: clienteId, nome: nome.trim(),
+      ativo: true, criado_em: agora, atualizado_em: agora,
+    };
+    await salvarOperacaoLocal({ tabela: "rebanho_fazendas", acao: "insert", dados: registroCompleto });
+    const registro = { id: registroCompleto.id, nome: registroCompleto.nome, ativo: true };
+    const lista = [...(fazendas || []), registro];
+    setFazendas(lista);
+    salvarCacheJson(`rastro-fazendas-${clienteId}`, lista);
+    setFazendaId(registro.id);
+    localStorage.setItem(`rastro-fazenda-${clienteId}`, registro.id);
+    return registro;
   }
 
   async function criarPrimeiraFazenda(e) {
@@ -353,16 +395,18 @@ function AmbienteCliente({ consultorId, usuarioEmail, clienteId, clienteNome, is
   }
 
   async function atualizarFazenda(id, mudancas) {
-    const { data, error } = await supabase
-      .from("rebanho_fazendas")
-      .update({ ...mudancas, atualizado_em: new Date().toISOString() })
-      .eq("id", id)
-      .eq("cliente_id", clienteId)
-      .select("id, nome, ativo")
-      .single();
-    if (error) throw error;
-    setFazendas((atuais) => atuais.map((item) => item.id === id ? data : item));
-    return data;
+    const atual = fazendas.find((item) => item.id === id);
+    if (!atual) throw new Error("Fazenda não encontrada.");
+    const registroCompleto = {
+      ...atual, ...mudancas, id, consultor_id: consultorId, cliente_id: clienteId,
+      atualizado_em: new Date().toISOString(),
+    };
+    await salvarOperacaoLocal({ tabela: "rebanho_fazendas", acao: "upsert", dados: registroCompleto });
+    const registro = { id, nome: registroCompleto.nome, ativo: registroCompleto.ativo };
+    const lista = fazendas.map((item) => item.id === id ? registro : item);
+    setFazendas(lista);
+    salvarCacheJson(`rastro-fazendas-${clienteId}`, lista);
+    return registro;
   }
 
   if (fazendas === undefined) return <div style={styles.loadingScreen}>Carregando fazendas...</div>;
@@ -421,7 +465,7 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
   const [erroFazenda, setErroFazenda] = useState("");
   const [salvandoFazenda, setSalvandoFazenda] = useState(false);
   const dados = useDadosRebanho(consultorId, clienteId, fazenda.id);
-  const { online, sincronizando, pendentes, sincronizar } = useConexao(consultorId);
+  const { online, sincronizando, pendentes, ultimoResultado, sincronizar } = useConexao(consultorId);
   const podeEditar = isConsultor || papel === "administrador" || papel === "editor";
   const podeTrocarFazenda = !fazendaRestrita;
 
@@ -529,6 +573,13 @@ function AppPrincipal({ consultorId, usuarioEmail, clienteId, clienteNome, fazen
             </div>
           </div>
         </div>
+
+        {ultimoResultado?.falhas > 0 && (
+          <div style={{ ...styles.errorBox, margin: "10px 18px 0" }}>
+            Os dados continuam seguros neste aparelho, mas {ultimoResultado.falhas} item(ns) ainda não foram enviados. Tente novamente quando a conexão estiver estável.
+            {ultimoResultado.erros?.[0] ? ` Motivo: ${ultimoResultado.erros[0]}` : ""}
+          </div>
+        )}
 
         <div className="content-area" style={styles.content}>
           {dados.carregando ? (

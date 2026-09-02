@@ -4,6 +4,11 @@ import { useEffect } from "react";
 
 export default function RegistroServiceWorker() {
   useEffect(() => {
+    // Pede ao navegador para não remover o IndexedDB em limpezas
+    // automáticas por falta de espaço. O pedido pode ser recusado, mas
+    // quando aceito aumenta a durabilidade dos dados ainda não enviados.
+    navigator.storage?.persist?.().catch(() => {});
+
     if ("serviceWorker" in navigator) {
       let mudouControlador = false;
       const liberarProximaAtualizacao = window.setTimeout(
