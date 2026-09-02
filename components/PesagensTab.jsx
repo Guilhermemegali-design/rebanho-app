@@ -122,7 +122,7 @@ function FormPesagem({ dados, onSalvo, onCancelar, inicial }) {
       setPeso(String(escala.peso));
       setOrigemPeso("bluetooth");
     }
-  }, [escala.peso]);
+  }, [escala.leituraId, escala.peso]);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
   const resultadosBusca = useMemo(() => {

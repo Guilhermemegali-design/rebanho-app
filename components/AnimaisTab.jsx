@@ -373,7 +373,7 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
       setPesoEntrada(String(escala.peso));
       setPesoDaBalanca(true);
     }
-  }, [escala.peso]);
+  }, [escala.leituraId, escala.peso]);
 
   function handleEscolherFornecedor(id) {
     if (id === "__novo__") {
@@ -611,6 +611,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
   const [brinco, setBrinco] = useState("");
   const [brincoRfid, setBrincoRfid] = useState("");
   const [peso, setPeso] = useState("");
+  const [pesoDaBalanca, setPesoDaBalanca] = useState(false);
   const [sexo, setSexo] = useState("femea");
   const [raca, setRaca] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -636,6 +637,13 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
   const loteEscolhido = dados.lotes.find((l) => l.id === loteId);
   const aoLerTag = useCallback((tag) => setBrincoRfid(tag), []);
   const { lendo } = useRfidScanner(aoLerTag);
+  const escala = useBluetoothScale();
+
+  useEffect(() => {
+    if (escala.peso == null) return;
+    setPeso(String(escala.peso));
+    setPesoDaBalanca(true);
+  }, [escala.leituraId, escala.peso]);
 
   function handleEscolherFornecedor(id) {
     if (id === "__novo__") {
@@ -709,6 +717,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
       setBrinco("");
       setBrincoRfid("");
       setPeso("");
+      setPesoDaBalanca(false);
       setValorEntrada("");
       setNotaFiscalFile(null);
       requestAnimationFrame(() => brincoRef.current?.focus());
@@ -736,7 +745,42 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
       <div style={styles.card}>
         <InputField label="Brinco visual" value={brinco} onChange={setBrinco} inputRef={brincoRef} placeholder="Número do brinco" />
         <InputField label="Brinco RFID (eletrônico)" value={brincoRfid} onChange={setBrincoRfid} placeholder="Lido pelo bastão, ou digite" />
-        <InputField label="Peso individual (kg)" type="number" value={peso} onChange={setPeso} placeholder="0" />
+        {escala.suportado ? (
+          <button
+            type="button"
+            onClick={escala.conectado ? escala.desconectar : escala.conectar}
+            disabled={escala.conectando}
+            style={{ ...styles.scaleBtn, ...(escala.conectado ? styles.scaleBtnConnected : {}), marginBottom: 12 }}
+          >
+            {escala.conectado ? <BluetoothConnected size={17} /> : <Bluetooth size={17} />}
+            {escala.conectando ? "Conectando..." : escala.conectado ? `Conectado: ${escala.dispositivo}` : "Conectar balança Bluetooth"}
+          </button>
+        ) : (
+          <div style={{ ...styles.hardwareHint, marginBottom: 12 }}>Neste aparelho, digite manualmente o peso mostrado na balança.</div>
+        )}
+        {escala.erro && <div style={{ ...styles.errorBox, marginBottom: 12 }}>{escala.erro}</div>}
+        {escala.conectando && escala.dispositivosEncontrados?.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={styles.hardwareHint}>Toque na balança para conectar:</div>
+            {escala.dispositivosEncontrados.map((item) => (
+              <button
+                key={item.endereco}
+                type="button"
+                onClick={() => escala.conectarEm(item.endereco, item.nome)}
+                style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }}
+              >
+                <Scale size={16} /> {item.nome}
+              </button>
+            ))}
+          </div>
+        )}
+        <InputField
+          label={`Peso individual (kg)${pesoDaBalanca ? " — lido da balança" : ""}`}
+          type="number"
+          value={peso}
+          onChange={(valor) => { setPeso(valor); setPesoDaBalanca(false); }}
+          placeholder="0"
+        />
         <SelectField label="Sexo" value={sexo} onChange={setSexo} options={[{ value: "femea", label: "Fêmea" }, { value: "macho", label: "Macho" }]} />
         <SelectField
           label="Raça"
@@ -844,6 +888,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
                     setBrinco(animal.brinco_atual || "");
                     setBrincoRfid(animal.brinco_rfid || "");
                     setPeso(animal.peso_entrada ?? "");
+                    setPesoDaBalanca(false);
                     setSexo(animal.sexo || "femea");
                     setRaca(animal.raca || "");
                     setCategoria(animal.categoria || "");
@@ -871,6 +916,7 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
                         setEditandoId(null);
                         setBrinco("");
                         setPeso("");
+                        setPesoDaBalanca(false);
                       }
                     } catch (err) {
                       setErro(err.message);
@@ -1060,6 +1106,7 @@ function FormEditarTimeline({ dados, item, onCancelar, onSalvo }) {
   const registro = item.registro;
   const [data, setData] = useState(item.data || "");
   const [peso, setPeso] = useState(registro.peso ?? "");
+  const [origemPeso, setOrigemPeso] = useState(registro.origem_peso || "manual");
   const [loteDestinoId, setLoteDestinoId] = useState(registro.lote_destino_id || "");
   const [localDestinoId, setLocalDestinoId] = useState(registro.local_destino_id || "");
   const [tipoSanidade, setTipoSanidade] = useState(registro.tipo || "vacina");
@@ -1070,6 +1117,13 @@ function FormEditarTimeline({ dados, item, onCancelar, onSalvo }) {
   const [observacoes, setObservacoes] = useState(registro.observacoes || "");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const escala = useBluetoothScale();
+
+  useEffect(() => {
+    if (item.tipo !== "pesagem" || escala.peso == null) return;
+    setPeso(String(escala.peso));
+    setOrigemPeso("bluetooth");
+  }, [item.tipo, escala.leituraId, escala.peso]);
 
   async function handleSalvar() {
     setSalvando(true);
@@ -1077,7 +1131,12 @@ function FormEditarTimeline({ dados, item, onCancelar, onSalvo }) {
     try {
       if (item.tipo === "pesagem") {
         if (!peso || Number(peso) <= 0) throw new Error("Informe um peso válido.");
-        await dados.atualizarPesagem(registro, { peso: Number(peso), data });
+        await dados.atualizarPesagem(registro, {
+          peso: Number(peso),
+          data,
+          origem_peso: origemPeso,
+          dispositivo: origemPeso === "bluetooth" ? escala.dispositivo : null,
+        });
       } else if (item.tipo === "movimentacao") {
         const mudancas = { data, observacoes: observacoes || null };
         if (registro.tipo === "transferencia_lote" || registro.tipo === "entrada") mudancas.lote_destino_id = loteDestinoId || null;
@@ -1108,7 +1167,45 @@ function FormEditarTimeline({ dados, item, onCancelar, onSalvo }) {
     <div>
       <BackHeader title={`Editar ${item.titulo}`} onBack={onCancelar} />
       <div style={styles.card}>
-        {item.tipo === "pesagem" && <InputField label="Peso (kg)" type="number" value={peso} onChange={setPeso} />}
+        {item.tipo === "pesagem" && (
+          <>
+            {escala.suportado ? (
+              <button
+                type="button"
+                onClick={escala.conectado ? escala.desconectar : escala.conectar}
+                disabled={escala.conectando}
+                style={{ ...styles.scaleBtn, ...(escala.conectado ? styles.scaleBtnConnected : {}), marginBottom: 12 }}
+              >
+                {escala.conectado ? <BluetoothConnected size={17} /> : <Bluetooth size={17} />}
+                {escala.conectando ? "Conectando..." : escala.conectado ? `Conectado: ${escala.dispositivo}` : "Conectar balança Bluetooth"}
+              </button>
+            ) : (
+              <div style={{ ...styles.hardwareHint, marginBottom: 12 }}>Neste aparelho, digite manualmente o peso mostrado na balança.</div>
+            )}
+            {escala.erro && <div style={{ ...styles.errorBox, marginBottom: 12 }}>{escala.erro}</div>}
+            {escala.conectando && escala.dispositivosEncontrados?.length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={styles.hardwareHint}>Toque na balança para conectar:</div>
+                {escala.dispositivosEncontrados.map((dispositivo) => (
+                  <button
+                    key={dispositivo.endereco}
+                    type="button"
+                    onClick={() => escala.conectarEm(dispositivo.endereco, dispositivo.nome)}
+                    style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }}
+                  >
+                    <Scale size={16} /> {dispositivo.nome}
+                  </button>
+                ))}
+              </div>
+            )}
+            <InputField
+              label={`Peso (kg)${origemPeso === "bluetooth" ? " — lido da balança" : ""}`}
+              type="number"
+              value={peso}
+              onChange={(valor) => { setPeso(valor); setOrigemPeso("manual"); }}
+            />
+          </>
+        )}
         {item.tipo === "sanidade" && (
           <>
             <SelectField label="Tipo" value={tipoSanidade} onChange={setTipoSanidade} options={[

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
@@ -127,6 +127,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const [rendimentoCarcaca, setRendimentoCarcaca] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const animalVendaAtivoRef = useRef("");
 
   const aoLerTag = useCallback(
     (tag) => {
@@ -145,10 +146,15 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const escala = useBluetoothScale();
 
   useEffect(() => {
-    if (escala.peso == null || !animalVendaAtivo) return;
-    setPesosSaida((atuais) => ({ ...atuais, [animalVendaAtivo]: String(escala.peso) }));
-    setOrigensPesosSaida((atuais) => ({ ...atuais, [animalVendaAtivo]: "bluetooth" }));
-  }, [escala.peso, animalVendaAtivo]);
+    animalVendaAtivoRef.current = animalVendaAtivo;
+  }, [animalVendaAtivo]);
+
+  useEffect(() => {
+    const animalAlvo = animalVendaAtivoRef.current;
+    if (escala.peso == null || !animalAlvo) return;
+    setPesosSaida((atuais) => ({ ...atuais, [animalAlvo]: String(escala.peso) }));
+    setOrigensPesosSaida((atuais) => ({ ...atuais, [animalAlvo]: "bluetooth" }));
+  }, [escala.leituraId, escala.peso]);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
 
