@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { styles } from "@/lib/styles";
 import { formatDataBR, formatKg, formatBRL } from "@/lib/format";
 import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
-import { Radio, ArrowLeftRight, Trash2, Pencil, Search } from "lucide-react";
+import { useBluetoothScale } from "@/lib/bluetoothScale";
+import { Radio, ArrowLeftRight, Trash2, Pencil, Search, Bluetooth, BluetoothConnected, Scale } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, SelectField, InputField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const TIPOS = {
@@ -113,6 +114,8 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const [buscaDigitada, setBuscaDigitada] = useState("");
   const [loteParaAdicionar, setLoteParaAdicionar] = useState("");
   const [pesosSaida, setPesosSaida] = useState({});
+  const [origensPesosSaida, setOrigensPesosSaida] = useState({});
+  const [animalVendaAtivo, setAnimalVendaAtivo] = useState("");
   const [tipo, setTipo] = useState(inicial?.tipo || "transferencia_lote");
   const [loteDestinoId, setLoteDestinoId] = useState(inicial?.lote_destino_id || "");
   const [novoLote, setNovoLote] = useState(false);
@@ -133,16 +136,25 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
         setAnimalId(animal.id);
       } else {
         setAnimaisSelecionados((atuais) => (atuais.includes(animal.id) ? atuais : [...atuais, animal.id]));
+        setAnimalVendaAtivo(animal.id);
       }
     },
     [dados.animais, inicial]
   );
   const { lendo } = useRfidScanner(aoLerTag);
+  const escala = useBluetoothScale();
+
+  useEffect(() => {
+    if (escala.peso == null || !animalVendaAtivo) return;
+    setPesosSaida((atuais) => ({ ...atuais, [animalVendaAtivo]: String(escala.peso) }));
+    setOrigensPesosSaida((atuais) => ({ ...atuais, [animalVendaAtivo]: "bluetooth" }));
+  }, [escala.peso, animalVendaAtivo]);
 
   const animalEscolhido = dados.animais.find((a) => a.id === animalId);
 
   function adicionarAnimal(animal) {
     setAnimaisSelecionados((atuais) => (atuais.includes(animal.id) ? atuais : [...atuais, animal.id]));
+    setAnimalVendaAtivo(animal.id);
     setBuscaDigitada("");
     setErro("");
   }
@@ -185,6 +197,8 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
       if (!rendimentoCarcaca || Number(rendimentoCarcaca) <= 0 || Number(rendimentoCarcaca) > 100) { setErro("Informe um rendimento de carcaça entre 0 e 100%."); return; }
       const semPeso = idsSelecionados.find((id) => !pesosSaida[id] || Number(pesosSaida[id]) <= 0);
       if (semPeso) { setErro("Informe o peso de saída de todos os animais selecionados."); return; }
+    } else if (idsSelecionados.some((id) => pesosSaida[id] !== undefined && pesosSaida[id] !== "" && Number(pesosSaida[id]) <= 0)) {
+      setErro("Informe pesos válidos ou deixe os campos em branco."); return;
     }
     if (novoLote && !nomeNovoLote.trim()) { setErro("Informe o nome do novo lote."); return; }
     setErro("");
@@ -221,6 +235,21 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
       } else {
         await Promise.all(registros.map((registro) => dados.registrarMovimentacao(registro.animalId, registro.dados)));
       }
+      if (!inicial) {
+        const pesagensDoManejo = idsSelecionados
+          .filter((id) => pesosSaida[id] !== undefined && pesosSaida[id] !== "")
+          .map((id) => ({
+            animalId: id,
+            peso: Number(pesosSaida[id]),
+            origem: origensPesosSaida[id] || "manual",
+          }));
+        await Promise.all(pesagensDoManejo.map((item) => dados.registrarPesagem(item.animalId, {
+          peso: item.peso,
+          data,
+          origem_peso: item.origem,
+          dispositivo: item.origem === "bluetooth" ? escala.dispositivo : null,
+        })));
+      }
       onSalvo();
     } catch (err) {
       setErro(err.message);
@@ -253,7 +282,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
           <>
             <SectionTitle>Animais</SectionTitle>
             <div style={styles.hardwareHint}>
-              O jeito mais rápido é apontar o bastão RFID pra cada animal — vai adicionando na lista abaixo. Sem o bastão à mão, dá pra digitar o brinco ou adicionar um lote inteiro de uma vez.
+              O jeito mais rápido é apontar o bastão RFID pra cada animal — ele entra na lista e recebe o próximo peso da balança. Também dá para digitar o brinco ou adicionar um lote inteiro; nesse caso, toque no animal antes de pesá-lo.
             </div>
             <SelectField
               label="Adicionar um lote inteiro (ex: vender/abater o lote todo)"
@@ -310,25 +339,36 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
                 if (!animal) return null;
                 return (
                   <div key={id} style={{ ...styles.rowCard, alignItems: "center" }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
-                      <div style={styles.listItemSub}>{animal.raca || "Raça não informada"}</div>
-                    </div>
-                    {TIPOS_COM_PESO_SAIDA.includes(tipo) && (
-                      <input
-                        type="number"
-                        min="1"
-                        inputMode="decimal"
-                        value={pesosSaida[id] || ""}
-                        onChange={(e) => setPesosSaida((atuais) => ({ ...atuais, [id]: e.target.value }))}
-                        placeholder="Peso kg"
-                        aria-label={`Peso de saída de ${animal.brinco_atual}`}
-                        style={{ ...styles.input, width: 110 }}
-                      />
-                    )}
                     <button
                       type="button"
-                      onClick={() => setAnimaisSelecionados((atuais) => atuais.filter((x) => x !== id))}
+                      onClick={() => setAnimalVendaAtivo(id)}
+                      style={{ flex: 1, border: 0, background: "transparent", padding: 0, textAlign: "left", cursor: "pointer" }}
+                    >
+                      <div style={styles.listItemTitle}>{animal.brinco_atual}</div>
+                      <div style={styles.listItemSub}>
+                        {animal.raca || "Raça não informada"}{animalVendaAtivo === id ? " · recebendo peso da balança" : ""}
+                      </div>
+                    </button>
+                    <input
+                      type="number"
+                      min="1"
+                      inputMode="decimal"
+                      value={pesosSaida[id] || ""}
+                      onFocus={() => setAnimalVendaAtivo(id)}
+                      onChange={(e) => {
+                        setPesosSaida((atuais) => ({ ...atuais, [id]: e.target.value }));
+                        setOrigensPesosSaida((atuais) => ({ ...atuais, [id]: "manual" }));
+                      }}
+                      placeholder={TIPOS_COM_PESO_SAIDA.includes(tipo) ? "Peso kg" : "Peso opcional"}
+                      aria-label={`Peso do animal ${animal.brinco_atual}`}
+                      style={{ ...styles.input, width: 120 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAnimaisSelecionados((atuais) => atuais.filter((x) => x !== id));
+                        if (animalVendaAtivo === id) setAnimalVendaAtivo("");
+                      }}
                       aria-label={`Remover ${animal.brinco_atual}`}
                       title="Remover"
                       style={styles.iconDangerBtn}
@@ -388,6 +428,36 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
         <InputField label="Data" type="date" value={data} onChange={setData} />
         <TextAreaField label="Observações" value={observacoes} onChange={setObservacoes} placeholder="Opcional" />
       </div>
+
+      {!inicial && (escala.suportado ? (
+        <button
+          type="button"
+          onClick={escala.conectado ? escala.desconectar : escala.conectar}
+          disabled={escala.conectando}
+          style={{ ...styles.scaleBtn, ...(escala.conectado ? styles.scaleBtnConnected : {}), marginTop: 14 }}
+        >
+          {escala.conectado ? <BluetoothConnected size={17} /> : <Bluetooth size={17} />}
+          {escala.conectando ? "Conectando..." : escala.conectado ? `Conectado: ${escala.dispositivo}` : "Conectar balança Bluetooth"}
+        </button>
+      ) : (
+        <div style={styles.hardwareHint}>Neste aparelho, digite manualmente o peso mostrado na balança.</div>
+      ))}
+      {escala.erro && <div style={styles.errorBox}>{escala.erro}</div>}
+      {escala.conectando && escala.dispositivosEncontrados?.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={styles.hardwareHint}>Toque na balança para conectar:</div>
+          {escala.dispositivosEncontrados.map((item) => (
+            <button
+              key={item.endereco}
+              type="button"
+              onClick={() => escala.conectarEm(item.endereco, item.nome)}
+              style={{ ...styles.rowCard, width: "100%", cursor: "pointer", textAlign: "left" }}
+            >
+              <Scale size={16} /> {item.nome}
+            </button>
+          ))}
+        </div>
+      )}
 
       {erro && <div style={styles.errorBox}>{erro}</div>}
       <div style={styles.offlineNotice}>Sem sinal no curral? Sem problema — fica salvo no aparelho e envia sozinho quando a internet voltar.</div>
