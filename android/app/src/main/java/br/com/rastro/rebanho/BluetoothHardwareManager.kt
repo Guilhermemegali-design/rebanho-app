@@ -66,13 +66,24 @@ class BluetoothHardwareManager(
     val bleDevices = _bleDevices.asStateFlow()
     private val pendingDescriptors = ArrayDeque<BluetoothGattDescriptor>()
     private var activeName = tipo.titulo
+    private val framedBleBuffer = mutableListOf<Byte>()
 
     // Nomes conhecidos priorizados na lista de busca — inclui o hardware
     // real do Rebanho (Tru-Test S3, Allflex RS420) além de marcas comuns
     // do mercado, pra facilitar identificar o aparelho certo numa busca
     // que aceita qualquer dispositivo Bluetooth por perto.
     private val priorityNames: List<String> = when (tipo) {
-        TipoEquipamento.BALANCA -> listOf("TRU-TEST", "TRUTEST", "S3", "SN150", "SAICON", "DIGI", "TOPCON")
+        TipoEquipamento.BALANCA -> listOf(
+            "COIMMA",
+            "KM3",
+            "TRU-TEST",
+            "TRUTEST",
+            "S3",
+            "SN150",
+            "SAICON",
+            "DIGI",
+            "TOPCON",
+        )
         TipoEquipamento.BASTAO -> listOf("ALLFLEX", "RS420", "RFID", "LEITOR", "READER", "TAG", "HDX", "FDX")
     }
     private val buscaMensagem = when (tipo) {
@@ -199,6 +210,7 @@ class BluetoothHardwareManager(
         stopBleScan()
         disconnect(closeScan = false)
         activeName = bleNames[address] ?: deviceName(device)
+        framedBleBuffer.clear()
         onStatus(false, "Conectando a $activeName sem pareamento…")
         bluetoothGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
@@ -308,7 +320,58 @@ class BluetoothHardwareManager(
 
     private fun handleBleValue(value: ByteArray) {
         if (value.isEmpty()) return
-        onFrame(value)
+
+        // A Coimma KM3-N usa um canal serial BLE. Cada leitura tem 26 bytes,
+        // delimitados por STX (0x02) e ETX (0x03), mas o MTU do equipamento
+        // divide o quadro em duas notificações (20 + 6 bytes). Entregar cada
+        // pedaço isolado ao JavaScript fazia o primeiro pedaço ser confundido
+        // com uma medição padrão e gerava um peso incorreto. Remontamos apenas
+        // os equipamentos Coimma/KM3; a Tru-Test S3 continua recebendo cada
+        // notificação padrão sem qualquer alteração.
+        if (!usaQuadroSerialCoimma()) {
+            onFrame(value)
+            return
+        }
+
+        val inicio = value.indexOfLast { it == STX }
+        if (inicio >= 0) {
+            // Um novo STX invalida qualquer quadro anterior que tenha ficado
+            // incompleto depois de uma perda momentânea de sinal.
+            framedBleBuffer.clear()
+            value.copyOfRange(inicio, value.size).forEach(framedBleBuffer::add)
+        } else if (framedBleBuffer.isNotEmpty()) {
+            value.forEach(framedBleBuffer::add)
+        } else {
+            return
+        }
+
+        if (framedBleBuffer.size > MAX_SERIAL_FRAME_SIZE) {
+            framedBleBuffer.clear()
+            return
+        }
+
+        // O checksum (penúltimo byte) pode coincidir numericamente com ETX.
+        // Por isso usamos o tamanho fixo observado do protocolo, em vez de
+        // encerrar no primeiro byte 0x03 encontrado.
+        while (framedBleBuffer.size >= COIMMA_FRAME_SIZE) {
+            if (framedBleBuffer.first() != STX) {
+                framedBleBuffer.removeAt(0)
+                continue
+            }
+            if (framedBleBuffer[COIMMA_FRAME_SIZE - 1] != ETX) {
+                framedBleBuffer.removeAt(0)
+                continue
+            }
+            val quadro = ByteArray(COIMMA_FRAME_SIZE) { indice -> framedBleBuffer[indice] }
+            framedBleBuffer.subList(0, COIMMA_FRAME_SIZE).clear()
+            onFrame(quadro)
+        }
+    }
+
+    private fun usaQuadroSerialCoimma(): Boolean {
+        if (tipo != TipoEquipamento.BALANCA) return false
+        val nome = activeName.uppercase()
+        return nome.contains("COIMMA") || nome.contains("KM3")
     }
 
     @SuppressLint("MissingPermission")
@@ -398,6 +461,7 @@ class BluetoothHardwareManager(
         runCatching { bluetoothGatt?.close() }
         bluetoothSocket = null
         bluetoothGatt = null
+        framedBleBuffer.clear()
     }
 
     fun canUseBluetooth(): Boolean =
@@ -414,5 +478,9 @@ class BluetoothHardwareManager(
     companion object {
         private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
+        private const val STX: Byte = 0x02
+        private const val ETX: Byte = 0x03
+        private const val COIMMA_FRAME_SIZE = 26
+        private const val MAX_SERIAL_FRAME_SIZE = 512
     }
 }
