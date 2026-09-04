@@ -272,6 +272,7 @@ export default function AnimaisTab({ dados, animalInicialId, onAnimalInicialCons
         <div className="card-view" style={{ padding: listaFiltrada.length > 0 ? "10px 14px 14px" : 0 }}>
           {listaFiltrada.map((a) => {
             const status = statusAnimal(a, dados);
+            const { ultimaPesagem, gmd } = infoPesoAnimal(a, dados.pesagens);
             return (
               <div key={a.id} style={{ ...styles.listItem, display: "flex" }}>
                 <button
@@ -285,6 +286,10 @@ export default function AnimaisTab({ dados, animalInicialId, onAnimalInicialCons
                     <div style={styles.listItemSub}>
                       {[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}
                       {a.brinco_rfid ? ` · RFID ${a.brinco_rfid}` : ""}
+                    </div>
+                    <div style={{ ...styles.listItemSub, marginTop: 2 }}>
+                      {ultimaPesagem ? `${formatKg(ultimaPesagem.peso)} em ${formatDataBR(ultimaPesagem.data)}` : "Sem pesagem registrada"}
+                      {gmd != null && <span style={{ marginLeft: 6, ...(gmd >= 0.5 ? styles.gmdBom : styles.gmdBaixo) }}>{gmd.toFixed(2)} kg/d</span>}
                     </div>
                   </div>
                 </button>
