@@ -272,6 +272,7 @@ export default function AnimaisTab({ dados, animalInicialId, onAnimalInicialCons
         <div className="card-view" style={{ padding: listaFiltrada.length > 0 ? "10px 14px 14px" : 0 }}>
           {listaFiltrada.map((a) => {
             const status = statusAnimal(a, dados);
+            const { ultimaPesagem, gmd } = infoPesoAnimal(a, dados.pesagens);
             return (
               <div key={a.id} style={{ ...styles.listItem, display: "flex" }}>
                 <button
@@ -285,6 +286,10 @@ export default function AnimaisTab({ dados, animalInicialId, onAnimalInicialCons
                     <div style={styles.listItemSub}>
                       {[a.raca, a.categoria].filter(Boolean).join(" · ") || "—"}
                       {a.brinco_rfid ? ` · RFID ${a.brinco_rfid}` : ""}
+                    </div>
+                    <div style={{ ...styles.listItemSub, marginTop: 2 }}>
+                      {ultimaPesagem ? `${formatKg(ultimaPesagem.peso)} em ${formatDataBR(ultimaPesagem.data)}` : "Sem pesagem registrada"}
+                      {gmd != null && <span style={{ marginLeft: 6, ...(gmd >= 0.5 ? styles.gmdBom : styles.gmdBaixo) }}>{gmd.toFixed(2)} kg/d</span>}
                     </div>
                   </div>
                 </button>
@@ -321,7 +326,7 @@ function infoPesoAnimal(animal, pesagens) {
   const historico = [...pesagens.filter((p) => p.animal_id === animal.id)].sort(
     (a, b) => a.data.localeCompare(b.data) || (a.criado_em || "").localeCompare(b.criado_em || "")
   );
-  const ultimaPesagem = historico[historico.length - 1];
+  let ultimaPesagem = historico[historico.length - 1];
   const referenciasAnteriores = historico.filter((p) => ultimaPesagem && p.data < ultimaPesagem.data);
   if (
     ultimaPesagem &&
@@ -330,6 +335,13 @@ function infoPesoAnimal(animal, pesagens) {
     animal.data_entrada < ultimaPesagem.data
   ) {
     referenciasAnteriores.push({ peso: animal.peso_entrada, data: animal.data_entrada });
+  }
+  // Animal recém-cadastrado, ainda sem nenhuma pesagem lançada: o peso
+  // de entrada do cadastro é o último peso conhecido (mesma regra já
+  // usada no cálculo do Painel) — sem isso a coluna ficava em branco
+  // pra todo animal novo, mesmo tendo peso de entrada informado.
+  if (!ultimaPesagem && animal.peso_entrada != null && animal.data_entrada) {
+    ultimaPesagem = { peso: animal.peso_entrada, data: animal.data_entrada };
   }
   referenciasAnteriores.sort((a, b) => a.data.localeCompare(b.data));
   const referenciaAnterior = referenciasAnteriores[referenciasAnteriores.length - 1];

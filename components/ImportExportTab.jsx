@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { styles } from "@/lib/styles";
 import { Download, Upload, FileSpreadsheet } from "lucide-react";
 import { PrimaryButton, SectionTitle } from "@/components/UI";
+import { encontrarAnimalPorTag } from "@/lib/rfid";
 
 function indiceColuna(cabecalho, termos) {
   return cabecalho.findIndex((c) => c != null && termos.some((t) => String(c).toLowerCase().includes(t)));
@@ -95,7 +96,12 @@ export default function ImportExportTab({ dados }) {
       const idxPeso = indiceColuna(cabecalho, ["peso"]);
       const idxValor = indiceColuna(cabecalho, ["valor"]);
 
+      // Linha cujo brinco já existe no rebanho vira uma pesagem nova no
+      // animal existente (se a planilha tiver peso e data), em vez de
+      // criar um cadastro duplicado — isso já causou um bug real: uma
+      // planilha de pesagem mensal recriava os mesmos animais toda vez.
       const registros = [];
+      const pesagensExistentes = [];
       let ignoradas = 0;
       for (const linha of linhas.slice(1)) {
         if (!linha || linha.every((v) => v == null || v === "")) continue;
@@ -105,22 +111,38 @@ export default function ImportExportTab({ dados }) {
         // sem valor nela): usa o código RFID como identificador principal.
         const brinco = brincoVisual || brincoRfid;
         if (!brinco) { ignoradas++; continue; }
+        const brincoTexto = String(brinco).trim();
+        const peso = idxPeso !== -1 ? normalizarNumero(linha[idxPeso]) : null;
+        const data = idxData !== -1 ? normalizarData(linha[idxData]) : new Date().toISOString().slice(0, 10);
+
+        const animalExistente = encontrarAnimalPorTag(dados.animais, brincoTexto);
+        if (animalExistente) {
+          if (peso != null) {
+            pesagensExistentes.push({ animalId: animalExistente.id, brinco: animalExistente.brinco_atual, peso, data });
+          } else {
+            ignoradas++;
+          }
+          continue;
+        }
+
         const sexoTexto = idxSexo !== -1 ? String(linha[idxSexo] || "").toLowerCase() : "";
         registros.push({
-          brinco_atual: String(brinco).trim(),
+          brinco_atual: brincoTexto,
           brinco_rfid: brincoRfid ? String(brincoRfid).trim() : null,
           sexo: sexoTexto.startsWith("m") ? "macho" : "femea",
           raca: idxRaca !== -1 ? linha[idxRaca] || null : null,
           categoria: idxCategoria !== -1 ? linha[idxCategoria] || null : null,
           origem: idxOrigem !== -1 ? linha[idxOrigem] || null : null,
-          data_entrada: idxData !== -1 ? normalizarData(linha[idxData]) : new Date().toISOString().slice(0, 10),
-          peso_entrada: idxPeso !== -1 ? normalizarNumero(linha[idxPeso]) : null,
+          data_entrada: data,
+          peso_entrada: peso,
           valor_entrada: idxValor !== -1 ? normalizarNumero(linha[idxValor]) : null,
         });
       }
 
-      if (registros.length === 0) throw new Error("Nenhuma linha válida encontrada (confira se a coluna Brinco está preenchida).");
-      setPreview({ registros, ignoradas });
+      if (registros.length === 0 && pesagensExistentes.length === 0) {
+        throw new Error("Nenhuma linha válida encontrada (confira se a coluna Brinco está preenchida).");
+      }
+      setPreview({ registros, pesagensExistentes, ignoradas });
     } catch (err) {
       setErro(err.message);
     } finally {
@@ -134,8 +156,13 @@ export default function ImportExportTab({ dados }) {
     setImportando(true);
     setErro("");
     try {
-      await dados.criarAnimaisEmLote(preview.registros);
-      setConcluido(preview.registros.length);
+      if (preview.registros.length > 0) {
+        await dados.criarAnimaisEmLote(preview.registros);
+      }
+      for (const p of preview.pesagensExistentes) {
+        await dados.registrarPesagem(p.animalId, { peso: p.peso, data: p.data, origem_peso: "manual" });
+      }
+      setConcluido(preview.registros.length + preview.pesagensExistentes.length);
       setPreview(null);
     } catch (err) {
       setErro(err.message);
@@ -159,7 +186,7 @@ export default function ImportExportTab({ dados }) {
       <SectionTitle>Importar</SectionTitle>
       <div style={styles.card}>
         <div style={{ padding: "12px 0", fontSize: 13.5, color: "#5C5C58" }}>
-          Planilha Excel ou CSV com uma linha por animal e coluna "Brinco" e/ou "Brinco RFID" (pelo menos uma é obrigatória). Colunas opcionais reconhecidas: Sexo, Raça, Categoria, Origem, Data de entrada, Peso, Valor.
+          Planilha Excel ou CSV com uma linha por animal e coluna "Brinco" e/ou "Brinco RFID" (pelo menos uma é obrigatória). Colunas opcionais reconhecidas: Sexo, Raça, Categoria, Origem, Data de entrada, Peso, Valor. Se o brinco já existir no rebanho, a linha vira uma pesagem nova nesse animal (não cria um cadastro duplicado) — precisa ter Peso preenchido pra isso.
         </div>
         <input
           ref={inputRef}
@@ -178,8 +205,9 @@ export default function ImportExportTab({ dados }) {
           <div style={{ padding: "12px 0", display: "flex", alignItems: "center", gap: 8 }}>
             <FileSpreadsheet size={16} color="#1F4D45" />
             <div style={{ fontSize: 13.5 }}>
-              {preview.registros.length} animal(is) prontos para importar
-              {preview.ignoradas > 0 ? ` (${preview.ignoradas} linha(s) ignorada(s) sem brinco)` : ""}.
+              {preview.registros.length} animal(is) novo(s) pronto(s) para cadastrar
+              {preview.pesagensExistentes.length > 0 ? ` · ${preview.pesagensExistentes.length} pesagem(ns) em animal(is) já cadastrado(s)` : ""}
+              {preview.ignoradas > 0 ? ` (${preview.ignoradas} linha(s) ignorada(s) — sem brinco, ou brinco já cadastrado sem peso na planilha)` : ""}.
             </div>
           </div>
           <PrimaryButton onClick={confirmarImportacao} disabled={importando}>
@@ -191,7 +219,7 @@ export default function ImportExportTab({ dados }) {
       {concluido != null && (
         <div style={{ ...styles.alertaCard, background: "#E4EFE9", border: "1px solid #CDE3D9" }}>
           <Upload size={16} color="#1F4D45" />
-          <div style={{ ...styles.alertaTitulo, color: "#1F4D45" }}>{concluido} animal(is) importado(s) com sucesso.</div>
+          <div style={{ ...styles.alertaTitulo, color: "#1F4D45" }}>{concluido} registro(s) importado(s) com sucesso.</div>
         </div>
       )}
     </div>
