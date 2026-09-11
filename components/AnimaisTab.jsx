@@ -7,7 +7,7 @@ import { useRfidScanner, encontrarAnimalPorTag } from "@/lib/rfid";
 import { useBluetoothScale } from "@/lib/bluetoothScale";
 import { statusAnimal } from "@/lib/alerts";
 import { enviarDocumentoRebanho } from "@/lib/storage";
-import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, Bluetooth, BluetoothConnected, ArrowLeftRight, Syringe, Trash2, Pencil } from "lucide-react";
+import { Search, Tag as TagIcon, ChevronRight, Radio, Scale, Bluetooth, BluetoothConnected, ArrowLeftRight, Syringe, Trash2, Pencil, HeartPulse } from "lucide-react";
 import { PageHeader, BackHeader, EmptyHint, Field, InputField, SelectField, TextAreaField, PrimaryButton, SectionTitle } from "@/components/UI";
 
 const SITUACOES = { ativo: "Ativo", vendido: "Vendido", abatido: "Abatido", morto: "Morto", transferido: "Transferido" };
@@ -346,6 +346,10 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
   const [sexo, setSexo] = useState(inicial?.sexo || "femea");
   const [raca, setRaca] = useState(inicial?.raca || "");
   const [origem, setOrigem] = useState(inicial?.origem || "");
+  const [dataNascimento, setDataNascimento] = useState(inicial?.data_nascimento || "");
+  const [pesoNascimento, setPesoNascimento] = useState(inicial?.peso_nascimento ?? "");
+  const [maeId, setMaeId] = useState(inicial?.mae_id || "");
+  const [touroId, setTouroId] = useState(inicial?.touro_id || "");
   const [fornecedorId, setFornecedorId] = useState(inicial?.fornecedor_id || "");
   const [loteId, setLoteId] = useState(inicial?.lote_atual_id || "");
   const [categoria, setCategoria] = useState(inicial?.categoria || "");
@@ -433,6 +437,10 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
         nota_fiscal_url: notaFiscalUrl,
         lote_atual_id: loteIdFinal || null,
         local_atual_id: loteEscolhido?.local_id || null,
+        data_nascimento: dataNascimento || null,
+        peso_nascimento: pesoNascimento === "" ? null : Number(pesoNascimento),
+        mae_id: maeId || null,
+        touro_id: touroId || null,
       });
     } catch (err) {
       setErro(err.message);
@@ -480,6 +488,28 @@ function FormAnimal({ dados, onSalvar, onCancelar, onVarios, inicial }) {
           ]}
         />
         <InputField label="Origem" value={origem} onChange={setOrigem} placeholder="De onde veio o animal" />
+
+        <SectionTitle>Genealogia (opcional)</SectionTitle>
+        <InputField label="Data de nascimento" type="date" value={dataNascimento} onChange={setDataNascimento} />
+        <InputField label="Peso ao nascer (kg)" type="number" value={pesoNascimento} onChange={setPesoNascimento} placeholder="Opcional" />
+        <SelectField
+          label="Mãe"
+          value={maeId}
+          onChange={setMaeId}
+          options={[
+            { value: "", label: "Não informada" },
+            ...dados.animais.filter((a) => a.sexo === "femea" && a.id !== inicial?.id).map((a) => ({ value: a.id, label: a.brinco_atual })),
+          ]}
+        />
+        <SelectField
+          label="Pai (touro)"
+          value={touroId}
+          onChange={setTouroId}
+          options={[
+            { value: "", label: "Não informado" },
+            ...(dados.touros || []).filter((t) => t.ativo !== false).map((t) => ({ value: t.id, label: t.nome })),
+          ]}
+        />
 
         {!novoFornecedor ? (
           <SelectField
@@ -616,6 +646,10 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
   const [raca, setRaca] = useState("");
   const [categoria, setCategoria] = useState("");
   const [origem, setOrigem] = useState("");
+  const [dataNascimento, setDataNascimento] = useState("");
+  const [pesoNascimento, setPesoNascimento] = useState("");
+  const [maeId, setMaeId] = useState("");
+  const [touroId, setTouroId] = useState("");
   const [fornecedorId, setFornecedorId] = useState("");
   const [novoFornecedor, setNovoFornecedor] = useState(false);
   const [nomeNovoFornecedor, setNomeNovoFornecedor] = useState("");
@@ -705,6 +739,10 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
         local_atual_id: loteFinal?.local_id || null,
         observacoes: observacoes || null,
         nota_fiscal_url: notaFiscalUrl,
+        data_nascimento: dataNascimento || null,
+        peso_nascimento: pesoNascimento === "" ? null : Number(pesoNascimento),
+        mae_id: maeId || null,
+        touro_id: touroId || null,
       };
       if (editandoId) {
         const atualizado = await onAtualizar(editandoId, payload);
@@ -720,6 +758,10 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
       setPesoDaBalanca(false);
       setValorEntrada("");
       setNotaFiscalFile(null);
+      setDataNascimento("");
+      setPesoNascimento("");
+      setMaeId("");
+      setTouroId("");
       requestAnimationFrame(() => brincoRef.current?.focus());
     } catch (err) {
       setErro(err.message);
@@ -801,6 +843,22 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
           ]}
         />
         <InputField label="Origem" value={origem} onChange={setOrigem} placeholder="De onde vieram os animais" />
+
+        <SectionTitle>Genealogia (opcional)</SectionTitle>
+        <InputField label="Data de nascimento" type="date" value={dataNascimento} onChange={setDataNascimento} />
+        <InputField label="Peso ao nascer (kg)" type="number" value={pesoNascimento} onChange={setPesoNascimento} placeholder="Opcional" />
+        <SelectField
+          label="Mãe"
+          value={maeId}
+          onChange={setMaeId}
+          options={[{ value: "", label: "Não informada" }, ...dados.animais.filter((a) => a.sexo === "femea").map((a) => ({ value: a.id, label: a.brinco_atual }))]}
+        />
+        <SelectField
+          label="Pai (touro)"
+          value={touroId}
+          onChange={setTouroId}
+          options={[{ value: "", label: "Não informado" }, ...(dados.touros || []).filter((t) => t.ativo !== false).map((t) => ({ value: t.id, label: t.nome }))]}
+        />
 
         {!novoFornecedor ? (
           <SelectField
@@ -893,6 +951,10 @@ function FormAnimaisEmLote({ dados, onSalvar, onAtualizar, onExcluir, onCancelar
                     setRaca(animal.raca || "");
                     setCategoria(animal.categoria || "");
                     setOrigem(animal.origem || "");
+                    setDataNascimento(animal.data_nascimento || "");
+                    setPesoNascimento(animal.peso_nascimento ?? "");
+                    setMaeId(animal.mae_id || "");
+                    setTouroId(animal.touro_id || "");
                     setFornecedorId(animal.fornecedor_id || "");
                     setLoteId(animal.lote_atual_id || "");
                     setDataEntrada(animal.data_entrada || new Date().toISOString().slice(0, 10));
@@ -968,6 +1030,31 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
     for (const p of dados.procedimentos.filter((x) => x.animal_id === animal.id)) {
       itens.push({ id: p.id || p.client_uuid, data: p.data_aplicacao, tipo: "sanidade", registro: p, icone: Syringe, titulo: rotuloProcedimento(p, dados.medicamentos), sub: p.observacoes || "" });
     }
+    for (const pa of (dados.protocoloAnimais || []).filter((x) => x.animal_id === animal.id)) {
+      const protocolo = (dados.protocolosIatf || []).find((p) => p.id === pa.protocolo_id);
+      itens.push({
+        id: pa.id || pa.client_uuid, data: pa.data_ia || pa.data_retirada_realizada || pa.data_d0, tipo: "protocolo_iatf", registro: pa,
+        icone: HeartPulse, titulo: `IATF: ${protocolo?.nome || "protocolo"}`, sub: `Status: ${pa.status.replace(/_/g, " ")}`,
+      });
+    }
+    for (const dg of (dados.diagnosticosGestacao || []).filter((x) => x.animal_id === animal.id)) {
+      itens.push({
+        id: dg.id || dg.client_uuid, data: dg.data_dg, tipo: "dg", registro: dg,
+        icone: HeartPulse, titulo: `Diagnóstico de gestação: ${dg.resultado}`, sub: dg.observacoes || "",
+      });
+    }
+    for (const p of (dados.partos || []).filter((x) => x.animal_id === animal.id)) {
+      itens.push({
+        id: p.id || p.client_uuid, data: p.data_parto, tipo: "parto", registro: p,
+        icone: HeartPulse, titulo: `Parto (${p.tipo_parto})`, sub: p.observacoes || "",
+      });
+    }
+    for (const d of (dados.desmames || []).filter((x) => x.animal_id === animal.id)) {
+      itens.push({
+        id: d.id || d.client_uuid, data: d.data_desmame, tipo: "desmame", registro: d,
+        icone: HeartPulse, titulo: "Desmame", sub: d.peso_desmame ? `${formatKg(d.peso_desmame)}` : "",
+      });
+    }
     return itens.sort((a, b) => (b.data || "").localeCompare(a.data || ""));
   }, [dados, animal.id]);
 
@@ -978,6 +1065,10 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
       if (item.tipo === "pesagem") await dados.excluirPesagem(item.registro);
       if (item.tipo === "movimentacao") await dados.excluirMovimentacao(item.registro);
       if (item.tipo === "sanidade") await dados.excluirProcedimento(item.registro);
+      if (item.tipo === "protocolo_iatf") await dados.excluirAnimalDoProtocolo(item.registro);
+      if (item.tipo === "dg") await dados.excluirDiagnostico(item.registro);
+      if (item.tipo === "parto") await dados.excluirParto(item.registro);
+      if (item.tipo === "desmame") await dados.excluirDesmame(item.registro);
     } catch (err) {
       window.alert(err.message || "Não foi possível excluir esta informação.");
     } finally {
@@ -1049,6 +1140,9 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
             ? `${gmdDesdeEntrada.toFixed(3)} kg/dia · baseado no último peso conhecido`
             : "Aguardando uma pesagem posterior à entrada"}
         />
+        {animal.data_nascimento && <Field label="Data de nascimento" value={formatDataBR(animal.data_nascimento)} />}
+        {animal.mae_id && <Field label="Mãe" value={dados.animais.find((a) => a.id === animal.mae_id)?.brinco_atual || "—"} />}
+        {animal.touro_id && <Field label="Pai (touro)" value={(dados.touros || []).find((t) => t.id === animal.touro_id)?.nome || "—"} />}
         <Field label="Fornecedor" value={fornecedor ? fornecedor.nome : "—"} />
         <Field label="Entrada" value={`${formatDataBR(animal.data_entrada)} · ${formatKg(animal.peso_entrada)} · ${formatBRL(animal.valor_entrada)}`} />
         {animal.nota_fiscal_url && (
@@ -1075,15 +1169,17 @@ function FichaAnimal({ dados, animal, onVoltar, onExcluido }) {
                 <div style={styles.timelineTitulo}><Icone size={12} style={{ verticalAlign: -1, marginRight: 5 }} />{item.titulo}</div>
                 <div style={styles.timelineData}>{formatDataBR(item.data)}{item.sub ? ` · ${item.sub}` : ""}</div>
               </div>
-              <button
-                type="button"
-                onClick={() => setItemTimelineEditando(item)}
-                aria-label={`Editar ${item.titulo}`}
-                title="Editar informação"
-                style={{ ...styles.iconEditBtn, marginLeft: 8 }}
-              >
-                <Pencil size={15} />
-              </button>
+              {["pesagem", "movimentacao", "sanidade"].includes(item.tipo) && (
+                <button
+                  type="button"
+                  onClick={() => setItemTimelineEditando(item)}
+                  aria-label={`Editar ${item.titulo}`}
+                  title="Editar informação"
+                  style={{ ...styles.iconEditBtn, marginLeft: 8 }}
+                >
+                  <Pencil size={15} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => excluirItemTimeline(item)}

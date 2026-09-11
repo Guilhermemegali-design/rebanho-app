@@ -18,6 +18,7 @@ import SanidadeTab from "@/components/SanidadeTab";
 import AlertasTab from "@/components/AlertasTab";
 import GmdAbatidosTab from "@/components/GmdAbatidosTab";
 import ConfiguracoesTab from "@/components/ConfiguracoesTab";
+import CriaTab from "@/components/CriaTab";
 
 // Mesmo UID do consultor usado no Consultoria-main e no
 // Confinamento-main (é a mesma pessoa logada nos três apps). O
@@ -650,6 +651,15 @@ function AppPrincipal({ consultorId, usuarioId, usuarioEmail, clienteId, cliente
                   dados={dados}
                   animalInicialId={animalAbrirId}
                   onAnimalInicialConsumido={() => setAnimalAbrirId(null)}
+                />
+              )}
+              {tab === "cria" && (
+                <CriaTab
+                  dados={dados}
+                  onAbrirAnimal={(animalId) => {
+                    setAnimalAbrirId(animalId);
+                    setTab("animais");
+                  }}
                 />
               )}
               {tab === "locais" && <LocaisLotesTab dados={dados} />}

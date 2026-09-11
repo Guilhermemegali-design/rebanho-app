@@ -13,11 +13,13 @@ import {
   Settings,
   LogOut,
   X,
+  Baby,
 } from "lucide-react";
 
 export const ABAS_SIDEBAR = [
   { id: "painel", label: "Painel", icon: LayoutDashboard },
   { id: "animais", label: "Animais", icon: TagIcon },
+  { id: "cria", label: "Cria", icon: Baby },
   { id: "locais", label: "Lotes e locais", icon: MapPin },
   { id: "pesagens", label: "Pesagens", icon: Scale },
   { id: "sanidade", label: "Sanidade", icon: Stethoscope },
