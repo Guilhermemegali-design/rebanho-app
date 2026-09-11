@@ -113,6 +113,7 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
   const [animaisSelecionados, setAnimaisSelecionados] = useState([]);
   const [buscaDigitada, setBuscaDigitada] = useState("");
   const [loteParaAdicionar, setLoteParaAdicionar] = useState("");
+  const [dataPesagemParaAdicionar, setDataPesagemParaAdicionar] = useState(new Date().toISOString().slice(0, 10));
   const [pesosSaida, setPesosSaida] = useState({});
   const [origensPesosSaida, setOrigensPesosSaida] = useState({});
   const [animalVendaAtivo, setAnimalVendaAtivo] = useState("");
@@ -180,6 +181,23 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
     const ids = animaisDoLoteParaAdicionar.map((a) => a.id);
     setAnimaisSelecionados((atuais) => [...atuais, ...ids.filter((id) => !atuais.includes(id))]);
     setLoteParaAdicionar("");
+    setErro("");
+  }
+
+  // Curral costuma mover pro confinamento (ou outro lote) todo mundo que
+  // acabou de ser pesado num dia — em vez de escanear de novo animal por
+  // animal, junta pelo registro de pesagem já feito naquela data.
+  const animaisPesadosNaData = useMemo(() => {
+    if (!dataPesagemParaAdicionar) return [];
+    const idsComPesagem = new Set(
+      dados.pesagens.filter((p) => p.data === dataPesagemParaAdicionar).map((p) => p.animal_id)
+    );
+    return dados.animais.filter((a) => a.situacao === "ativo" && idsComPesagem.has(a.id));
+  }, [dados.animais, dados.pesagens, dataPesagemParaAdicionar]);
+
+  function adicionarPesadosNaData() {
+    const ids = animaisPesadosNaData.map((a) => a.id);
+    setAnimaisSelecionados((atuais) => [...atuais, ...ids.filter((id) => !atuais.includes(id))]);
     setErro("");
   }
 
@@ -305,6 +323,21 @@ function FormMovimentacao({ dados, onSalvo, onCancelar, inicial }) {
               <button type="button" onClick={adicionarLoteInteiro} style={{ ...styles.editLinkBtn, marginBottom: 14 }}>
                 Adicionar os {animaisDoLoteParaAdicionar.length} animais deste lote
               </button>
+            )}
+            <InputField
+              label="Adicionar animais pesados numa data (ex: mover pro confinamento quem acabou de ser pesado)"
+              type="date"
+              value={dataPesagemParaAdicionar}
+              onChange={setDataPesagemParaAdicionar}
+            />
+            {dataPesagemParaAdicionar && (
+              animaisPesadosNaData.length > 0 ? (
+                <button type="button" onClick={adicionarPesadosNaData} style={{ ...styles.editLinkBtn, marginBottom: 14 }}>
+                  Adicionar os {animaisPesadosNaData.length} animais pesados em {formatDataBR(dataPesagemParaAdicionar)}
+                </button>
+              ) : (
+                <div style={{ ...styles.hardwareHint, marginBottom: 14 }}>Nenhum animal ativo com pesagem em {formatDataBR(dataPesagemParaAdicionar)}.</div>
+              )
             )}
             <div style={{ ...styles.field, position: "relative" }}>
               <div style={styles.fieldLabel}>Digitar o brinco</div>
